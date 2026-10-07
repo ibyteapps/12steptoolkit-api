@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<phpunit xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:noNamespaceSchemaLocation="vendor/phpunit/phpunit/phpunit.xsd"
+         bootstrap="vendor/autoload.php"
+         colors="true"
+>
+    <testsuites>
+        <testsuite name="Unit">
+            <directory>tests/Unit</directory>
+        </testsuite>
+        <testsuite name="Feature">
+            <directory>tests/Feature</directory>
+        </testsuite>
+    </testsuites>
+    <source>
+        <include>
+            <directory>app</directory>
+        </include>
+    </source>
+    <php>
+        <ini name="memory_limit" value="512M"/>
+        <env name="APP_ENV" value="testing"/>
+        <env name="APP_KEY" value="base64:2fl+Ktvkfl+Fuz4Qp/A75G2RTiWVA/ZoKZvp6fiiM10="/>
+        <env name="APP_MAINTENANCE_DRIVER" value="file"/>
+        <env name="BCRYPT_ROUNDS" value="4"/>
+        <env name="CACHE_STORE" value="array"/>
+        <env name="DB_CONNECTION" value="sqlite"/>
+        <env name="DB_DATABASE" value=":memory:"/>
+        <env name="DB_URL" value=""/>
+        <env name="MAIL_MAILER" value="array"/>
+        <env name="QUEUE_CONNECTION" value="sync"/>
+        <env name="SESSION_DRIVER" value="array"/>
+        <env name="LOG_CHANNEL" value="null"/>
+        <!-- Nothing here may come from the machine's own .env: a test that
+             picks up a real key is a test that can reach a real provider. -->
+        <env name="SYNC_NEEDS_SUBSCRIPTION" value="false"/>
+        <!-- The legacy compatibility layer, on, with obvious placeholders. -->
+        <env name="LEGACY_V19_ENABLED" value="true"/>
+        <env name="LEGACY_V8_ENABLED" value="true"/>
+        <env name="LEGACY_JWT_SECRET" value="test-legacy-jwt-secret-at-least-32-bytes-long"/>
+        <env name="LEGACY_SERVER_SECRET" value="test-legacy-server-secret"/>
+        <env name="LEGACY_SEAL_ON_V2_LOGIN" value="true"/>
+        <env name="LEGACY_PLAINTEXT_PASSWORD" value="keep"/>
+        <!-- Tests must never reach a real store or a real push service. -->
+        <env name="REVENUECAT_ENABLED" value="false"/>
+        <env name="REVENUECAT_SECRET_KEY" value=""/>
+        <env name="REVENUECAT_WEBHOOK_AUTH" value="test-webhook-secret"/>
+        <env name="GOOGLE_CLIENT_IDS" value="test-google-client"/>
+        <env name="APPLE_CLIENT_IDS" value="com.12stepapp.recoverybox"/>
+        <env name="APPLE_ISSUER_ID" value=""/>
+        <env name="APPLE_KEY_ID" value=""/>
+        <env name="APPLE_PRIVATE_KEY_PATH" value=""/>
+        <env name="APPLE_NOTIFICATIONS_FORWARD_URL" value=""/>
+        <env name="GOOGLE_PLAY_CREDENTIALS" value=""/>
+        <env name="GOOGLE_PUBSUB_SERVICE_ACCOUNT" value=""/>
+        <env name="GOOGLE_PUBSUB_AUDIENCE" value=""/>
+        <env name="ICONS_PATH" value="storage/framework/testing/icons"/>
+    </php>
+</phpunit>

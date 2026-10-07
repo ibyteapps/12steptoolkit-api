@@ -1,0 +1,12 @@
+{
+    "preset": "laravel",
+    "notPath": [
+        "public/big-book-online.php",
+        "public/buddha.php",
+        "public/contact.php",
+        "public/index2.php",
+        "public/privacy.php",
+        "public/read.php",
+        "public/terms.php"
+    ]
+}
