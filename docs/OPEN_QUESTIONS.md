@@ -205,7 +205,36 @@ only been shared, which is exactly the kind of wrong that matters in step work.
 **What answers it.** You, in one sentence. Or the sponsor-facing screen in the
 shipped app, if you can tell me what the two states look like to a sponsor.
 
-### C3. Is `accounts.email` meant to be non-unique?
+### C3. Should a cancellation clear `accounts.subscribed`?
+
+`accounts.subscribed` is a tinyint that **no code path in either old API ever
+clears**. There is no webhook anywhere in the old system, so a cancellation, a
+refund or an expiry was never learned — the column therefore answers "has this
+person ever paid", not "is this person premium".
+
+Both old apps read it. Which means there are people in the field whose premium
+today rests on that flag having been set years ago, for a subscription they
+stopped paying for.
+
+**What this application does.** `EntitlementService` writes the column when it
+grants access and **never clears it**. Clearing it would take access away from
+people who have it right now, which is a product decision rather than a
+tidy-up, and not one I am going to make quietly inside a service class.
+
+**What answers it.** You. Three options, and the middle one is what I would do:
+
+* leave it as it is — nobody loses anything, and some non-payers keep premium on
+  the old apps until they upgrade;
+* clear it **only for accounts that are sealed** (already on 2.0, so the flag is
+  no longer what their access depends on) — tidies the data with nobody affected;
+* clear it on any lapse — correct, and it will take premium away from an unknown
+  number of people on 1.9.0 and 1.6.6 with no warning and no way for them to
+  tell what happened.
+
+`SELECT COUNT(*) FROM accounts WHERE subscribed = 1;` against the number of
+live subscriptions in RevenueCat says how large the gap is.
+
+### C4. Is `accounts.email` meant to be non-unique?
 
 It is not unique in production — `tests/Support/LegacySchema.php` reproduces
 that deliberately, with a comment. There are almost certainly duplicate
@@ -220,6 +249,13 @@ into by email.
 `SELECT email, COUNT(*) c FROM accounts WHERE email <> '' GROUP BY email HAVING c > 1;`
 If that returns rows, it is worth a console screen to merge them, and I would
 add one.
+
+### C5. The Google product ids, again, but for the console
+
+`console/subscriptions` has a saved view called **Unknown product** whose whole
+purpose is to be empty. While C1 is unanswered it may not be, and a row in it is
+a purchase that granted nothing from this server. Worth a look after the first
+day of real traffic.
 
 ---
 

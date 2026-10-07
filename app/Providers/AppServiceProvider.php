@@ -9,6 +9,7 @@ use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\ServiceProvider;
+use Illuminate\Validation\Rules\Password;
 use Laravel\Sanctum\Sanctum;
 
 class AppServiceProvider extends ServiceProvider
@@ -31,6 +32,18 @@ class AppServiceProvider extends ServiceProvider
     public function boot(): void
     {
         Sanctum::usePersonalAccessTokenModel(PersonalAccessToken::class);
+
+        /*
+         | Console passwords: long rather than complicated, because length is
+         | what actually helps and a rule nobody can satisfy gets written on a
+         | sticky note. `uncompromised()` checks the password against the
+         | breach corpus, which is a live HTTP call — so it is on in production
+         | and off everywhere else, where it would make the test suite depend on
+         | the network.
+         */
+        Password::defaults(fn () => app()->isProduction()
+            ? Password::min(12)->uncompromised()
+            : Password::min(12));
 
         $this->configureRateLimiting();
     }

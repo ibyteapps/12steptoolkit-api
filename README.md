@@ -81,7 +81,7 @@ go in `.env`.
 
 ```bash
 cd /Users/tushar/Work/Websites/12StepToolkit/api
-php vendor/bin/pest                  # 38 tests
+php vendor/bin/pest                  # 88 tests
 php vendor/bin/pint                  # formatting
 php vendor/bin/pint --test           # formatting, check only
 ```
@@ -93,7 +93,7 @@ is the written-down version of what this application believes the production
 schema to be, and the only way to find out that the belief is wrong. Read its
 header before trusting a column type.
 
-What the 38 cover:
+What the 88 cover:
 
 * **the canonical request string** (7 unit tests) — held to the shape read off
   `19/auth_checker.php` *and* both shipped clients. If one of these breaks,
@@ -113,6 +113,36 @@ What the 38 cover:
 * **counts**, and `get_app_settings.php` answering under `data` rather than
   `response` — the one endpoint in v19 that breaks its own envelope, which both
   clients parse that way.
+* **entitlements** — fourteen tests on the three-source resolver, each written
+  in the mean direction: they set up the situation where a naive "last writer
+  wins" would revoke somebody who is paying, and assert that it does not.
+* **the console** — every page behind the guard, the staff-account flow (a
+  single-use hashed link, no `--password` flag anywhere), grants, support
+  replies, and the audit trail.
+* **the data boundary**, which is the one console property that must never
+  regress: a record is written into each collection carrying a string that
+  appears nowhere else in the application, all seven console pages are loaded,
+  and none of those strings may appear on any of them. A new panel, a debug
+  dump, an exception or a `select *` that leaks one fails this test by name.
+
+## Two commands worth knowing about
+
+```bash
+cd /Users/tushar/Work/Websites/12StepToolkit/api
+php artisan console:user you@example.com   # the only way a staff account exists
+php artisan app:check                      # is THIS server wired up?
+php artisan app:check --legacy             # ...and is the database the shape we think?
+```
+
+`console:user` prints a single-use set-password link; there is no registration
+page and no `--password` flag. **On a fresh deploy nothing can sign in to the
+console until this has been run once.**
+
+`app:check` is for the twenty minutes after a cutover: it checks the database and
+whether it is the right one, every adopted table, `install_secrets` (the cutover
+blocker — see `docs/OPEN_QUESTIONS.md` A4), the application's own tables, cache,
+queue, the scheduler heartbeat, storage permissions, and every legacy switch with
+what it means. Exit code 1 on any failure, so it can be the body of a monitor.
 
 ## The documents
 

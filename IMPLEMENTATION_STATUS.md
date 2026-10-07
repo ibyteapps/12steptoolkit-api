@@ -4,7 +4,7 @@ Honest state of the Laravel layer as of **2026-10-07**. Written so that the
 difference between "built and tested", "deliberately stubbed" and "not started"
 is never a guess.
 
-**Tests: 38 passed (96 assertions). Pint clean.**
+**Tests: 88 passed (320 assertions). Pint clean.**
 
 ---
 
@@ -63,14 +63,90 @@ All five run, and none of them names an adopted table:
 framework tables, `account_security`, the auth tables, the console tables, the
 billing tables. `README.md` lists what each creates.
 
+### Entitlements — the three-source resolver
+
+`Services/Billing/EntitlementService` is the only thing allowed to answer "is
+this person premium?", and it exists because during the overlap there are three
+legitimate sources: store subscriptions this server verified, RevenueCat
+(read-only, and the only source that knows about every subscription sold before
+this server existed — which is all of them), and grants made in the console.
+
+Three sources for one boolean is ordinarily a bug. One rule makes it safe:
+
+> **No source may take away access that another source still grants.**
+
+The resolved entitlement is the most generous of the three. Fourteen tests, each
+written in the mean direction — they set up the situation where a naive "last
+writer wins" would revoke somebody, and assert that it does not. Covered: a late
+RevenueCat webhook versus a fresh Apple verification and the reverse, whichever
+source reaches further, a lifetime grant beating every date, immediate
+revocation on a refund, access held through a billing-retry grace period, a
+cancelled subscription running to its end, an unmapped product granting nothing
+while RevenueCat still carries the person, idempotency, and an expiry being a
+date passing rather than an event anybody sends.
+
+`StoreSubscription`, `StoreOrder` and `ComplimentaryGrant` are the models under
+it. Money is integers in milli-units all the way to the string that renders it.
+
+### The console
+
+Login, the set-password link, and six pages — all behind the guard, all tested:
+
+* **Overview** — what is waiting, then what is wrong, then the week. "What is
+  wrong" is the unattached purchases, the unrecognised product ids and the
+  pending deletions: money or obligations already outstanding that nobody
+  reports, because the person affected does not know what to call it.
+* **Accounts** — search by id, email, the app's own identifier or nickname; then
+  one page per account answering "is their backup working" first, because that is
+  the question support is actually asked.
+* **Subscriptions** — saved views for the three ways one goes wrong (no account
+  attached, unknown product, ending this week), where premium is coming from, and
+  takings for thirty days.
+* **Support** — threads, oldest first within a state, with the link to that
+  person's account page, which is the point of the screen.
+* **Cutover** — the three figures `docs/CUTOVER.md` step 4 says to watch, plus
+  the switches. The AA Big Book console has no equivalent; this one exists so
+  that the rollback decision is not made from a log file at eleven at night.
+* **Audit** — who did what, looks included, readable by everybody who can sign
+  in.
+
+`Services/Console/AccountSnapshot` is the only thing the console uses to look at
+an account, and it is written so that selecting a content column would have to
+be a deliberate act: every query in it is a `count()` or a `max()` on a
+timestamp.
+
+**The boundary has its own test.** `tests/Feature/Console/PagesTest.php` writes
+a record into each collection carrying a string that appears nowhere else in the
+application, then loads all seven console pages and asserts that none of those
+strings appears on any of them. If a new panel, a debug dump, an exception, an
+eager-loaded relation or a `select *` ever exposes one, that test fails and says
+which page and which field.
+
+### Commands
+
+* `php artisan console:user` — the only way a staff account comes into being.
+  There is no registration page and no `--password` flag: a new account has a
+  null password and is unusable until a 30-minute, single-use, hashed-at-rest
+  link is followed. `--reset` clears the old password as well as issuing a link,
+  `--deactivate` switches an account off without deleting it (so
+  `console_audit` keeps its author), `--list` shows who can get in.
+* `php artisan app:check` — is *this server* wired up. Written for the twenty
+  minutes after a cutover: the database and whether it is the right one, every
+  adopted table with its row count, `install_secrets` (the cutover blocker), the
+  application's own tables, cache, queue, the scheduler heartbeat, storage
+  permissions, the icons directory being outside the web root, and every legacy
+  switch with what it means. `--legacy` checks the adopted tables column by
+  column against `tests/Support/LegacySchema.php`, which is the check to run the
+  first time this application meets the real database. Exit code 1 on any
+  failure, so it can be the body of a monitor.
+
 ### The rest
 
-`/api/v2/health`. The console's login and overview. `ApiExceptionRenderer` with
-every content column in `dontFlash`. `SecurityHeaders`, `AssignRequestId`,
-`ForceJsonResponse`. The scheduler, with its heartbeat, queue worker and prunes.
-`config/legacy.php`, `config/billing.php`, `config/toolkit.php`,
-`config/console.php` — each with the reasoning next to the value rather than in
-a separate document that will drift.
+`/api/v2/health`. `ApiExceptionRenderer` with every content column in
+`dontFlash`. `SecurityHeaders`, `AssignRequestId`, `ForceJsonResponse`. The
+scheduler, with its heartbeat, queue worker and prunes. `config/legacy.php`,
+`config/billing.php`, `config/toolkit.php`, `config/console.php` — each with the
+reasoning next to the value rather than in a separate document that will drift.
 
 ---
 
@@ -119,9 +195,10 @@ is a known shape in the old scripts:
 * **account deletion** — the one the stores require. `accounts.deletion_timestamp`
   exists already.
 
-### 3.2 Billing
+### 3.2 Billing — the providers
 
-Everything is configured and nothing is wired:
+The resolver and the models are built and tested (§1). What is not wired is
+everything that talks to a store:
 
 * Apple **App Store Server Notifications V2** → `/api/v2/webhooks/apple`,
   JWS verified against the Apple Root CA - G3 fingerprint already in
@@ -130,47 +207,46 @@ Everything is configured and nothing is wired:
   `/api/v2/webhooks/google`.
 * **RevenueCat, read-only** — the webhook, and `revenuecat:reconcile` for what
   the webhook misses. Nothing here ever writes to RevenueCat.
-* `EntitlementService`, with the rule that makes two sources of truth safe:
-  **neither source may take away access the other still grants.** A late
-  RevenueCat webhook cannot revoke a subscription this server just verified with
-  Apple, and vice versa.
-* `store_orders` writing, and the sponsee-gift consumables that turn a purchase
-  into a slot.
+* `store_orders` writing — the money figures on the console's subscriptions page
+  are correct and will read zero until this exists, which the page says in words
+  rather than showing as £0.
+* the sponsee-gift consumables that turn a purchase into a slot.
+
+`EntitlementService` is already the thing all of them will call, so each is a
+verifier that writes a `store_subscriptions` row and then one `refresh()`.
 
 The Google product ids are a guess and marked as one (§C1). Until they are
 confirmed, an unlisted product is recorded and grants nothing from this server,
 and every current subscriber stays premium through the RevenueCat bridge — so
 the unknown costs nobody access.
 
-### 3.3 The console, beyond the skeleton
+### 3.3 The console, the rest of it
 
-Login and an overview exist. The surface to build, drawing on the AA Big Book
-back office and then going past it:
+Six pages are built (§1). What is left, in the order I would add it:
 
-*From AA Big Book:* accounts, subscriptions, purchases, orders, plans, support
-threads, adverts, quotes.
+* **plans** — what the paywall offers, edited without an app release. The data
+  is already in `config/billing.php`'s `offered`; the screen moves it into
+  `settings` so it is not a deploy.
+* **orders** — one row per payment, once §3.2 is writing them.
+* **sponsorship** — requests, pairs, and **reported users**. This one matters:
+  the old system's entire moderation surface was `19/admin/reported.php`, an
+  unauthenticated HTML page listing every report with the reporter's id, the
+  reported person's id and the free-text reason. Anyone who found the URL could
+  read it.
+* **chat moderation** — blocked on the same open questions as the comments
+  endpoints (§A2, §A3).
+* **gifted subscriptions** — the sponsee consumables, once they grant anything.
+* **adverts and quotes** — the AA Big Book console has both; they are content
+  tables, not member content, and are straightforward.
 
-*New here, because this product has them:* sponsorship (requests, pairs,
-reported users), chat moderation, gifted subscriptions, and **the cutover's own
-numbers** — how many accounts are sealed, how many installs are still on 1.9.0
-or 1.6.6, the 401 rate on signed requests, the per-collection write rate against
-the same hour yesterday. That last page is what step 4 of `docs/CUTOVER.md` is
-watched on, so it is worth building before the switch rather than after.
+**The data boundary already holds and is tested** (§1), and it applies to
+everything in that list: counts and dates and sync state, never content.
 
-**The data boundary holds everywhere in that list: counts and dates and sync
-state, never content.** No inventory, no amend, no journal line, no chat message
-and no note is readable from the console, by anybody, at any permission level.
+### 3.4 Artisan commands still to write
 
-### 3.4 Artisan commands referenced but not written
-
-Four are named in config comments and in these documents, and do not exist yet:
-`app:check` (reads the scheduler heartbeat), `console:user` (creates a staff
-account — **needed before the console can be logged into on the server**),
-`billing:prices` (prints the real store catalogue, which is how §C1 gets
-answered), `revenuecat:reconcile`.
-
-`console:user` is the one with a dependency on it: without it there is no way in
-to the console on a fresh deploy.
+`console:user` and `app:check` are built (§1). Two remain, and both depend on
+§3.2: `billing:prices` (prints the real store catalogue, which is how §C1 gets
+answered) and `revenuecat:reconcile`.
 
 ### 3.5 The website layer
 
@@ -197,3 +273,12 @@ Things that are *as intended* and might look like oversights:
   free for everyone. `SYNC_NEEDS_SUBSCRIPTION` exists so that changing that
   would be a visible act.
 * **`sw8` is never written.** Cautious in the direction that cannot fail (§A1).
+* **`accounts.subscribed` is set and never cleared.** Writing it keeps somebody
+  who buys on 2.0 from being told they are not subscribed when they open 1.9.0.
+  Clearing it would take access away from people who have it today, which is a
+  decision for the owner and is §C3.
+* **The console has roles but does not yet enforce them.** `console_users.role`
+  is `support | billing | admin` and every page is open to all three. The
+  boundary that matters — no member content, at any level — is enforced in
+  `AccountSnapshot` and does not depend on roles, so this is a convenience
+  rather than a hole; it is listed so nobody assumes otherwise.
