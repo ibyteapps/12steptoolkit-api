@@ -7,6 +7,7 @@ use App\Http\Controllers\Api\V1\Android\CommentController;
 use App\Http\Controllers\Api\V1\Android\CountsController;
 use App\Http\Controllers\Api\V1\Android\InstallSecretController;
 use App\Http\Controllers\Api\V1\Android\RecordController;
+use App\Http\Controllers\Api\V1\Android\SponsorController;
 use App\Http\Controllers\Api\V1\Apple\AppleScriptController;
 use App\Http\Controllers\Api\V2\HealthController;
 use Illuminate\Support\Facades\Route;
@@ -91,6 +92,11 @@ $android = function (): void {
         // twenty-odd more, several of them duplicates of each other.
         foreach (CommentController::ENDPOINTS as $script => $call) {
             Route::post($script, [CommentController::class, $call]);
+        }
+
+        // Sponsorship and chat relationships. One table, two request flows.
+        foreach (SponsorController::ENDPOINTS as $script => $call) {
+            Route::post($script, [SponsorController::class, $call]);
         }
     });
 };

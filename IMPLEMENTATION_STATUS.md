@@ -4,7 +4,7 @@ Honest state of the Laravel layer as of **2026-10-07**. Written so that the
 difference between "built and tested", "deliberately stubbed" and "not started"
 is never a guess.
 
-**Tests: 129 passed (459 assertions). Pint clean.**
+**Tests: 149 passed (528 assertions). Pint clean.**
 
 ---
 
@@ -89,6 +89,25 @@ message by guessing an id; `block_report_user.php` takes the caller from
 `user_id` in the body; its INSERT is a duplicate-key error the second time
 somebody blocks the same person; and a receipt could be moved *backwards*, so a
 retry carrying a stale value un-read a message.
+
+**Sponsorship and chat relationships** — `get_friends`, `get_one_friend`,
+`fetch_sponsor_ids`, `send_chat_request`, `update_sponsors`,
+`check_if_has_sponsor_or_old_device`.
+
+One table, `sponsors`, carrying two request flows: 0 → 1 is sponsorship and
+5 → 6 is chat. The schema comment documents 0–4 and stops, so 5 and 6 were
+traced from the client (`extras/F.kt:684-687`, `FragmentMemberProfile.kt:278`)
+rather than guessed, as was `friendType` — 1 for my sponsor, 2 for my sponsee,
+3 for a chat — which the old SELECT derives with a CASE relative to whoever is
+reading.
+
+`update_sponsors.php` is another `WHERE id = ?` with no account clause, so
+anybody could accept, reject or delete anybody's sponsorship by guessing a row
+id. Beyond scoping that, two rules are new: **only the other side may accept**
+(otherwise whoever sent a request could accept it themselves, which is the whole
+of a request), and a blocked pair cannot open a relationship at all. Thread
+creation is now idempotent, so accepting twice cannot leave two threads with the
+conversation split between them.
 
 **Other** — `get_counts.php`; `get_app_settings.php`, answering under `data`
 rather than `response`, which is the one endpoint in v19 that breaks its own
@@ -256,7 +275,9 @@ is a known shape in the old scripts:
   left is what the `type` values mean, since `inventory_id` is polymorphic
   across inventories, amends and nights — one `GROUP BY type` settles it
   (§C2).
-* **sponsorship** — the directory, requests, accept/decline, the country facets.
+* **the sponsor directory** — browsing people who are accepting sponsees, with
+  the country facets. The relationships themselves are built (§1); this is the
+  search that finds somebody to ask.
 * **icons** — profile pictures, streamed by the application from outside the web
   root exactly as the old scripts do, which is what makes "only people who may
   see this picture can fetch it" enforceable.
