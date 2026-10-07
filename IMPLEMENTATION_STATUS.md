@@ -4,7 +4,7 @@ Honest state of the Laravel layer as of **2026-10-07**. Written so that the
 difference between "built and tested", "deliberately stubbed" and "not started"
 is never a guess.
 
-**Tests: 149 passed (528 assertions). Pint clean.**
+**Tests: 174 passed (600 assertions). Pint clean.**
 
 ---
 
@@ -108,6 +108,38 @@ id. Beyond scoping that, two rules are new: **only the other side may accept**
 of a request), and a blocked pair cannot open a relationship at all. Thread
 creation is now idempotent, so accepting twice cannot leave two threads with the
 conversation split between them.
+
+**Profile pictures** — `upload_icon`, `delete_icon`, and a streaming
+`icon/{account}` that is not a v19 script.
+
+`upload_icon.php` decides the file's type from a request header and its
+extension from the client's own filename, with no check that the bytes are an
+image: `evil.php` sent as `image/png` is saved as `<id>.php`. The only thing
+stopping that being remote code execution is that the icons directory happens to
+sit outside the web root — which a future "serve icons from nginx for speed"
+change would quietly remove. Here the type comes from the bytes
+(`getimagesize`), the extension is derived from that, the size is capped, and
+the client's filename is never used for anything.
+
+It also set `REQUIRE_AUTH false`, making it an unauthenticated file write for
+any account id. That one needed fixing; `REQUIRE_HMAC false` did not, and could
+not — see §4.
+
+Pictures stay outside the web root and are streamed by the application, which is
+the only arrangement where "only people who may see this can fetch it" is
+enforceable: yours, somebody you have a live relationship with, or somebody in
+the same thread.
+
+**Reminders** — `sync_reminders`, which turns the four `varchar(5)` times in
+`account_details` into `reminder_subscriptions` rows with a computed
+`next_fire_at`. The old script opens `REQUIRE_AUTH false` and takes `account_id`
+from the body, so it is an unauthenticated write for any account and an
+account-existence oracle besides.
+
+`next_fire_at` is computed in the subscriber's own timezone and stored in UTC,
+which is what keeps "half past seven" at half past seven across a clock change
+— 07:30 London is 07:30 UTC in winter and 06:30 in summer, and storing UTC alone
+drifts an hour twice a year. There is a test for exactly that.
 
 **Other** — `get_counts.php`; `get_app_settings.php`, answering under `data`
 rather than `response`, which is the one endpoint in v19 that breaks its own
@@ -278,10 +310,12 @@ is a known shape in the old scripts:
 * **the sponsor directory** — browsing people who are accepting sponsees, with
   the country facets. The relationships themselves are built (§1); this is the
   search that finds somebody to ask.
-* **icons** — profile pictures, streamed by the application from outside the web
-  root exactly as the old scripts do, which is what makes "only people who may
-  see this picture can fetch it" enforceable.
-* **reminders**, **meetings** (search and the per-day limits), **AI**.
+* **group pictures** — `upload_icon_group.php`, which is the same upload path
+  for a thread rather than a person.
+* **the reminder sender** — the schedule is built; what reads `next_fire_at` and
+  pushes through FCM is not, and it needs `notification_texts` (which has a
+  generated column and a FULLTEXT index) and the per-install push tokens.
+* **meetings** (search and the per-day limits), **AI**.
 * **account deletion** — the one the stores require. `accounts.deletion_timestamp`
   exists already.
 
@@ -347,7 +381,24 @@ application serves only what an export cannot.
 
 ---
 
-## 4. Known gaps that are not work items
+## 4. Two constraints worth knowing before changing anything
+
+**A multipart upload cannot be HMAC-signed under PHP.** The client's
+`HmacInterceptor` hashes the request body, multipart included. PHP cannot read
+the raw body of a `multipart/form-data` request at all — it consumes it into
+`$_POST` and `$_FILES` and leaves `php://input` empty — so the hash the client
+computes and the hash the server can compute are never the same bytes. That is
+why `upload_icon.php` and `upload_icon_group.php` are the only two scripts in
+the v19 tree with `REQUIRE_HMAC false`: it was forced, not chosen. Uploads here
+are authenticated by token, with a tighter rate limit, and the reason is written
+above the route so nobody "fixes" it by adding the signature middleware back.
+
+**`accounts.icon` above 40 is an `icons.id`, and iOS coerces it to 0.** So a
+picture uploaded on Android shows as no avatar on iOS. That is a client bug in a
+shipped app, not a server one, and worth knowing before somebody reports it as
+missing data.
+
+## 5. Known gaps that are not work items
 
 Things that are *as intended* and might look like oversights:
 

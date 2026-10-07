@@ -101,6 +101,13 @@ class AppServiceProvider extends ServiceProvider
             Limit::perHour(600)->by('ip:'.$r->ip()),
         ]);
 
+        // Uploads authenticate by token alone, because a multipart body cannot
+        // be signed, so they get the limit that a token-only endpoint needs.
+        RateLimiter::for('legacy-upload', fn (Request $r) => [
+            Limit::perMinute(6)->by($identity($r)),
+            Limit::perDay(60)->by($identity($r)),
+        ]);
+
         RateLimiter::for('console-login', fn (Request $r) => [
             Limit::perMinutes(10, 8)->by(mb_strtolower((string) $r->input('email')).'|'.$r->ip()),
             Limit::perMinutes(10, 30)->by('ip:'.$r->ip()),

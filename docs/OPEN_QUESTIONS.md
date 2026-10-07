@@ -282,7 +282,25 @@ server never sees, or delivered through an attested channel, which is a client
 release and a change to the v19 contract. Not worth it while the provenance rule
 holds.
 
-### B4. `mail_forgotpassword.php` emails the user their plaintext password
+### B4. `upload_icon.php` is an unauthenticated file write
+
+`define('REQUIRE_AUTH', false)` — so no token is needed. The extension comes
+from `pathinfo($file['name'])`, the client's own filename, and the type from
+`$file['type']`, a request header, with no check that the bytes are an image.
+So anybody can write a file of any name and any content, for any account id.
+
+What stops it being remote code execution is that `ICONS_PATH` points outside
+the web root, so the file is not reachable by URL. That is thin, and a future
+decision to serve icons straight from nginx would remove it without anybody
+connecting the two.
+
+`upload_icon_group.php` is the same.
+
+Not fixed on the live server, by the owner's decision of 2026-10-07 to leave it
+alone. This application requires a token, reads the type from the bytes and
+derives the extension from that.
+
+### B5. `mail_forgotpassword.php` emails the user their plaintext password
 
 Not being ported. The replacement sends a one-time code. Mentioned here because
 it means the plaintext `password` column has been readable *and used* recently

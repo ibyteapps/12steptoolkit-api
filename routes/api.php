@@ -5,8 +5,10 @@ use App\Http\Controllers\Api\V1\Android\AppSettingsController;
 use App\Http\Controllers\Api\V1\Android\AuthController;
 use App\Http\Controllers\Api\V1\Android\CommentController;
 use App\Http\Controllers\Api\V1\Android\CountsController;
+use App\Http\Controllers\Api\V1\Android\IconController;
 use App\Http\Controllers\Api\V1\Android\InstallSecretController;
 use App\Http\Controllers\Api\V1\Android\RecordController;
+use App\Http\Controllers\Api\V1\Android\ReminderController;
 use App\Http\Controllers\Api\V1\Android\SponsorController;
 use App\Http\Controllers\Api\V1\Apple\AppleScriptController;
 use App\Http\Controllers\Api\V2\HealthController;
@@ -76,6 +78,25 @@ $android = function (): void {
     Route::post('bootstrap_secret.php', InstallSecretController::class)
         ->middleware(['legacy.jwt', 'throttle:legacy-bootstrap']);
 
+    /*
+    | A token, and no signature — because a signature is impossible here.
+    |
+    | The client's `HmacInterceptor` hashes the request body, multipart
+    | included. PHP, on the other side, cannot read the raw body of a
+    | `multipart/form-data` request at all: it consumes it into `$_POST` and
+    | `$_FILES` and leaves `php://input` empty. So the hash the client computes
+    | and the hash the server can compute are never the same thing, and the
+    | signature can never verify.
+    |
+    | That is why `upload_icon.php` and `upload_icon_group.php` are the only two
+    | scripts in the whole v19 tree with `REQUIRE_HMAC false` — it was forced,
+    | not chosen. The old scripts also set `REQUIRE_AUTH false`, which was not
+    | forced: it made them an unauthenticated file write for any account id.
+    | A token is required here.
+    */
+    Route::post('upload_icon.php', [IconController::class, 'upload'])
+        ->middleware(['legacy.jwt', 'throttle:legacy-upload']);
+
     // Everything below is signed.
     Route::middleware(['legacy.signed'])->group(function (): void {
         Route::post('get_user_account.php', [AccountController::class, 'show']);
@@ -98,6 +119,24 @@ $android = function (): void {
         foreach (SponsorController::ENDPOINTS as $script => $call) {
             Route::post($script, [SponsorController::class, $call]);
         }
+
+        // Deleting and fetching are form-encoded, so they sign normally.
+        // Uploading cannot — see the note above `upload_icon.php`.
+        foreach (IconController::ENDPOINTS as $script => $call) {
+            Route::post($script, [IconController::class, $call]);
+        }
+
+        foreach (ReminderController::ENDPOINTS as $script => $call) {
+            Route::post($script, [ReminderController::class, $call]);
+        }
+
+        /*
+         | Not a v19 script: the old apps build a URL to a static path under the
+         | icons directory. This exists because the file lives outside the web
+         | root — which is what makes "only people who may see this picture can
+         | fetch it" enforceable at all, and the old arrangement could not.
+         */
+        Route::get('icon/{account}', [IconController::class, 'show'])->whereNumber('account');
     });
 };
 

@@ -16,13 +16,16 @@ use Illuminate\Testing\TestResponse;
  */
 function signAs(object $test, string $path, array $fields = [], array $overrides = []): TestResponse
 {
-    $body = http_build_query($fields);
+    // The client's `HmacInterceptor` signs whatever method the request uses, so
+    // a signed GET is as ordinary as a signed POST — `icon/{account}` is one.
+    $method = strtoupper((string) ($overrides['method'] ?? 'POST'));
+    $body = $method === 'GET' ? '' : http_build_query($fields);
     $hash = CanonicalRequest::bodyHash($body);
     $ts = $overrides['ts'] ?? time();
     $nonce = $overrides['nonce'] ?? bin2hex(random_bytes(8));
 
     $signature = CanonicalRequest::sign(
-        CanonicalRequest::build('POST', $path, $hash, $ts, $nonce),
+        CanonicalRequest::build($method, $path, $hash, $ts, $nonce),
         $overrides['secret'] ?? $test->secret,
     );
 
@@ -30,7 +33,7 @@ function signAs(object $test, string $path, array $fields = [], array $overrides
     // real request looks like once PHP has parsed an
     // `application/x-www-form-urlencoded` body into `$_POST`, and the signature
     // is over the body, not the parsed array.
-    return $test->call('POST', $path, $fields, [], [], [
+    return $test->call($method, $path, $method === 'GET' ? [] : $fields, [], [], [
         'CONTENT_TYPE' => 'application/x-www-form-urlencoded',
         'HTTP_AUTHORIZATION' => 'Bearer '.($overrides['token'] ?? $test->token),
         'HTTP_X_ACCOUNT_ID' => (string) ($overrides['accountId'] ?? $test->account->id),
