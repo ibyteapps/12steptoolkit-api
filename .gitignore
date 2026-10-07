@@ -17,3 +17,6 @@ npm-debug.log
 /database/*.sqlite
 /database/*.sqlite-journal
 /storage/app/legacy-import/
+
+# macOS Finder metadata. Present on the working copy, never part of the app.
+.DS_Store

@@ -3,6 +3,11 @@
 namespace App\Http\Controllers\Api\V1\Apple;
 
 use App\Http\Controllers\Controller;
+use App\Services\Apple\AppleDelete;
+use App\Services\Apple\AppleList;
+use App\Services\Apple\AppleListRequest;
+use App\Services\Apple\AppleOutput;
+use App\Services\Apple\AppleRecordType;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Symfony\Component\HttpFoundation\Response;
@@ -10,12 +15,19 @@ use Symfony\Component\HttpFoundation\Response;
 /**
  * The Apple (v8) API.
  *
- * **Not built yet**, and deliberately not half-built: the route group is
- * disabled by default (`LEGACY_V8_ENABLED=false`) so that pointing
- * `apple.12stepapp.com` at this application before the endpoints exist is a
- * clear failure rather than a quiet one. The middleware in front of this
- * controller answers an empty 200 when the flag is off, which is exactly what
- * `8/db.php`'s `exit(0)` does today, so nothing new appears in a 2021 client.
+ * Pointing `apple.12stepapp.com` at this application before an endpoint
+ * exists must be a clear failure rather than a quiet one, so
+ * `LEGACY_V8_ENABLED=false` makes `VerifyAppleSecret` answer **410**, and a
+ * script with no implementation here answers **503**.
+ *
+ * Neither of those is `exit(0)`. An earlier version of this comment claimed
+ * the disabled case returned an empty 200 "which is exactly what
+ * `8/db.php`'s `exit(0)` does today" — it does not, and conflating the two
+ * would have been worse than either: an empty 200 is what a *wrong secret*
+ * gets, because that is the one case where a 2021 client must see exactly
+ * what it already knows how to interpret. "This host is not serving v8 yet"
+ * and "your secret is wrong" are different answers and the client should be
+ * able to tell them apart.
  *
  * ## What it has to do, when it is written
  *
@@ -53,10 +65,69 @@ use Symfony\Component\HttpFoundation\Response;
  */
 class AppleScriptController extends Controller
 {
+    public function __construct(
+        private readonly AppleList $list,
+        private readonly AppleDelete $delete,
+    ) {}
+
     public function __invoke(Request $request, string $script): Response
+    {
+        return match ($script) {
+            'reachable.php' => AppleOutput::text('success'),
+            'getlist.php' => $this->getList($request),
+            'deleterecord.php' => $this->deleteRecord($request),
+
+            // `mysql_connect` / `mysql_query`, removed in PHP 7. These four
+            // have been fatalling in production for years, which is why iOS
+            // email-and-password sign-in does not work and has not for a long
+            // time. Reimplementing them would not restore a feature, it would
+            // *introduce* one — and in `login.php`'s case a plaintext password
+            // comparison. A 500 with an empty body is what a PHP fatal gives
+            // the client today, so that is what they keep giving it.
+            'login.php',
+            'getcounts_apple.php',
+            'sobrietydate.php',
+            'loguservisit.php' => AppleOutput::text('', 500),
+
+            default => $this->notBuilt($script),
+        };
+    }
+
+    /**
+     * `getlist.php`, all nine of it.
+     */
+    private function getList(Request $request): Response
+    {
+        $type = AppleRecordType::fromWire($request->input('type'));
+
+        // The old file defaults `$tablename` to `inventories` and falls through
+        // to an `else` that queries it for any unrecognised type, so `type=7`
+        // returned somebody's Fourth Step. An empty list instead: still valid
+        // JSON, still parses, and it answers a question the client never asks.
+        if ($type === null) {
+            return AppleOutput::rows([]);
+        }
+
+        return AppleOutput::rows(
+            $this->list->rows($type, AppleListRequest::from($request)),
+        );
+    }
+
+    private function deleteRecord(Request $request): Response
+    {
+        $ok = $this->delete->delete($request->input('type'), $request->input('id'));
+
+        // `echo("success")` / `echo("error")`, and no trailing space on either
+        // — unlike `writerecord.php`, which echoed `"success " . $sql`. The
+        // client only looks for the substring, but there is no reason to send
+        // bytes the old server did not.
+        return AppleOutput::text($ok ? 'success' : 'error');
+    }
+
+    private function notBuilt(string $script): Response
     {
         Log::warning('v8 endpoint requested before it exists', ['script' => $script]);
 
-        return response('error', 503)->header('Content-Type', 'text/html; charset=UTF-8');
+        return AppleOutput::text('error', 503);
     }
 }

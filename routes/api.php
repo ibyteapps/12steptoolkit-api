@@ -161,5 +161,14 @@ $apple = function (): void {
         ->where('script', '[a-z0-9_]+\.php');
 };
 
-Route::prefix('api/v1/apple/8')->name('v8.')->middleware('throttle:legacy-apple')->group($apple);
-Route::prefix('{legacyPrefix}/8')->where(['legacyPrefix' => '.*'])->middleware('throttle:legacy-apple')->group($apple);
+// `legacy.apple` BEFORE the throttle, and it was missing entirely until
+// 2026-10-07: these two groups carried `throttle:legacy-apple` and nothing
+// else, so the shared-secret check never ran. It did not matter while the
+// controller was a 503 — and it would have mattered enormously the moment
+// somebody implemented it, because the gate was in the middleware list of
+// `bootstrap/app.php` under an alias no route used. A 503 is a fine way to
+// hide a missing authentication layer from every test you can think to write.
+$appleMiddleware = ['legacy.apple', 'throttle:legacy-apple'];
+
+Route::prefix('api/v1/apple/8')->name('v8.')->middleware($appleMiddleware)->group($apple);
+Route::prefix('{legacyPrefix}/8')->where(['legacyPrefix' => '.*'])->middleware($appleMiddleware)->group($apple);

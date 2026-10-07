@@ -466,6 +466,29 @@ is a consistency fix as much as a speed one.
 
 ---
 
+### D4. `sample` — a one-column table nothing reads (drop candidate)
+
+```sql
+CREATE TABLE `sample` (`invtype` int(4) NOT NULL)
+  ENGINE=MyISAM DEFAULT CHARSET=latin1;
+```
+
+One column, MyISAM, not referenced from v19, from v8, from either client, or
+from the console. It looks like a scratch table from before 2019.
+
+**Recommended:** check it is empty and drop it.
+
+```sql
+SELECT COUNT(*) FROM sample;    -- expect 0
+-- then, only if 0:
+DROP TABLE sample;
+```
+
+It is the one production table `tests/Support/LegacySchema.php` does not
+create, so this application already behaves as though it does not exist.
+Nothing breaks either way; the reason to ask is that an unexplained table is
+indistinguishable from one somebody forgot to tell us about.
+
 ## E. Confirmed, recorded here so nobody re-opens them
 
 * **Bundle identifiers are unchanged.** `com.ibyteapps.aa12steptoolkit`

@@ -27,6 +27,21 @@ use Illuminate\Support\Facades\Schema;
  * against a real database: these tables already exist and have since 2019, and
  * this application's first rule is that it does not alter them.
  *
+ * **40 of production's 41 tables.** The one left out is `sample`, which is a
+ * single `invtype int(4) NOT NULL` column, MyISAM, no rows referenced from
+ * anywhere in either live API and not mentioned in any client. It is somebody's
+ * scratch table from before 2019. Not adopting it is deliberate — a fixture
+ * that creates it would imply this application has some use for it — and it is
+ * listed in `docs/OPEN_QUESTIONS.md` as a drop candidate rather than silently
+ * ignored, because "a table nothing reads" and "a table nothing reads *yet*"
+ * look identical from here.
+ *
+ * Note for anyone auditing this file with grep: `journals`, `gratitudes`,
+ * `subscription_orders`, `sponsee_orders` and the nine `sw*` tables are created
+ * in `foreach` loops rather than by a literal `Schema::create('name'`, because
+ * each group is the same shape repeated. A grep for literal creates finds 36
+ * and looks alarmingly short of 41. It is not.
+ *
  * ## Where SQLite cannot follow MariaDB
  *
  * Noted inline, and none of it changes behaviour under test:

@@ -266,23 +266,69 @@ reasoning next to the value rather than in a separate document that will drift.
 
 ## 2. Deliberately stubbed
 
-### The v8 (Apple) layer
+### The v8 (Apple) layer — started 2026-10-07
 
-`AppleScriptController` returns a logged **503**, and the route group is **off
-by default** (`LEGACY_V8_ENABLED=false`).
+Four of the twenty-five endpoints are built, against the **actual PHP** rather
+than the analysis of it, which changed two things the analysis did not record.
 
-That is a choice, not an omission: pointing `apple.12stepapp.com` at a
-half-built v8 layer would be a quiet failure in a 2021 client, which is the
-worst possible kind. With the flag off, the middleware answers an empty 200 —
-exactly what `8/db.php`'s `exit(0)` does today — so nothing new appears in iOS
-1.6.6, and with the flag on before the endpoints exist, the failure is loud.
+**Built:** `reachable.php`, `getlist.php` (all nine of its branches),
+`deleterecord.php`, and the four `mysql_*` scripts, which stay dead on purpose.
+Everything else still answers a logged **503**, and `LEGACY_V8_ENABLED` still
+turns the whole group off — now with a **410**, because "this host is not
+serving v8" and "your secret is wrong" are different facts and the operator
+pointing a DNS record at this application should be able to tell them apart. An
+earlier version of this file said the disabled case returned an empty 200; it
+did not, and conflating the two would have been worse than either.
 
-The controller's docblock is a full specification of the twenty-five endpoints,
-the four multiplexed ones, and the six behaviours that must change on the way
-(ownership clauses, the `updatefield.php` allow-list, prepared statements, the
-`"success " . $sql` responses, the plaintext-password email, and the four
-endpoints that use `mysql_*` and cannot run at all). Whoever writes it next does
-not have to re-read the old scripts.
+**The gate was not wired.** Both v8 route groups carried
+`throttle:legacy-apple` and nothing else, so `VerifyAppleSecret` sat in
+`bootstrap/app.php` under an alias no route used — the shared-secret check never
+ran. It did not matter while the controller was a 503 and would have mattered
+enormously the moment anybody implemented one. A 503 is a very effective way to
+hide a missing authentication layer from every test you would think to write.
+`AppleTest` now asserts the gate from the outside, four ways.
+
+**Two things reading the real `getlist.php` corrected:**
+
+* **`nights` is not `SELECT *`.** Line 56 selects `id, timestamp, thedate,
+  reviewed` and nothing else; the twelve answers are fetched one record at a
+  time by `getrecorddetail.php`. A faithful-looking `SELECT *` would have put
+  every user's whole nightly inventory on the wire on every open of that list.
+* **`icon > 40` becomes the string `"0"`** in the output loop (line 163) — a
+  product rule (41 bundled avatars, 0–40) hiding in a `while`.
+
+**Three behaviours deliberately not reproduced:**
+
+* the `$tablename = 'inventories'` **default**. In `getlist.php` an
+  unrecognised `type` fell through to an `else` that queried it, and in
+  `deleterecord.php` it meant a request with a missing type **deleted from
+  somebody's Fourth Step**. An unknown type now lists nothing and deletes
+  nothing.
+* the **hand-assembled JSON**. `echo '['`, a `json_encode` per row, and a comma
+  emitted only `if (json_last_error() == JSON_ERROR_NONE)` — so a row that
+  fails to encode prints nothing while the comma for the row before it has
+  already gone out, and any failure other than on the last row yields
+  `[{…},]`. Nothing hits it today and that is luck, not design; the
+  commented-out `utf8_encode`/`utf8ize` around the sponsor directory says it did
+  not always hold.
+* the **executed SQL in the response body**. `"success " . $sql` on three
+  endpoints. The literal `"success "` is kept because the client's only test is
+  `outputStr.contains("success")`; the statement is not, because a response that
+  echoes a query leaks a schema to anybody holding a secret that is printed in a
+  `test.html`.
+
+**What `deleterecord.php` still cannot do, and why that is written down rather
+than papered over.** The client posts exactly three fields — `id`, `type` and
+the shared secret (`_Constants.swift:520`) — so there is **no caller identity to
+scope a delete by**. An ownership clause here would have to derive the owner
+from the record, which always matches and protects nobody, and the code would
+then look safe. What it does instead: binds the id, refuses an unknown type, and
+**refuses outright once the owner has signed in on 2.0**. For this endpoint
+sealing is the whole of the protection, and it is the reason sealing exists.
+
+The controller's docblock remains a specification of the twenty-one endpoints
+still to write, the four multiplexed ones among them, and the behaviours that
+must change on the way.
 
 ---
 
