@@ -3,6 +3,7 @@
 use App\Http\Controllers\Api\V1\Android\AccountController;
 use App\Http\Controllers\Api\V1\Android\AppSettingsController;
 use App\Http\Controllers\Api\V1\Android\AuthController;
+use App\Http\Controllers\Api\V1\Android\CommentController;
 use App\Http\Controllers\Api\V1\Android\CountsController;
 use App\Http\Controllers\Api\V1\Android\InstallSecretController;
 use App\Http\Controllers\Api\V1\Android\RecordController;
@@ -83,6 +84,13 @@ $android = function (): void {
 
         foreach (RecordController::ENDPOINTS as $script => $call) {
             Route::post($script, [RecordController::class, $call]);
+        }
+
+        // Comments, chat threads, receipts and blocking. These are the ones
+        // `retrofit/ApiService.kt` actually calls; the live directory holds
+        // twenty-odd more, several of them duplicates of each other.
+        foreach (CommentController::ENDPOINTS as $script => $call) {
+            Route::post($script, [CommentController::class, $call]);
         }
     });
 };

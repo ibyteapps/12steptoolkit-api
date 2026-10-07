@@ -29,6 +29,22 @@ final class LegacyEnvelope
         ], $status);
     }
 
+    /**
+     * The envelope, plus fields **beside** `response` rather than inside it.
+     *
+     * `comment_add_update.php` returns `comment_id` at the top level as well as
+     * within `response`, and the Kotlin model reads the top-level one. There is
+     * no tidy way to describe that, so it gets its own method rather than being
+     * hand-assembled at the call site and quietly diverging.
+     */
+    public static function okWith(array $alongside, mixed $response = null, string $message = 'ok'): JsonResponse
+    {
+        return response()->json([
+            'status' => true,
+            'message' => $message,
+        ] + $alongside + ['response' => $response]);
+    }
+
     public static function fail(string $message, int $status = 400, mixed $response = null): JsonResponse
     {
         return response()->json([

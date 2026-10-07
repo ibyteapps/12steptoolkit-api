@@ -160,10 +160,15 @@ final class LegacySchema
     private static function stepWork(): void
     {
         /*
-         | `tstamp` is bigint everywhere in this group — the clients send
-         | milliseconds. An int column would have overflowed in 1970 + 2^31 ms,
-         | which is 1970 plus 24 days, so this was always bigint and the earlier
-         | guess of int here was simply wrong.
+         | `tstamp` is bigint everywhere in this group, and holds Unix
+         | **seconds** — not milliseconds. The clients divide:
+         | `F.getTStamp()` is `Date().time / 1_000L` (`extras/F.kt:607`), and
+         | `MorningsFragment` and `Nights.kt` both do `/ 1000` too. So the
+         | column is simply wider than it needs to be. Worth having written
+         | down, because "bigint timestamp" reads as milliseconds to everybody
+         | and comparing it against `comment_thread_subscribers.subscribed_at`
+         | (an int, also seconds) on that assumption would widen every chat
+         | visibility window by a factor of a thousand.
          |
          | Note the indexes, or the lack of them: `journals`, `gratitudes` and
          | `nights` have one on (account, time); `inventories`, `amends` and

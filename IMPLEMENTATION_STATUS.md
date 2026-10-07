@@ -4,7 +4,7 @@ Honest state of the Laravel layer as of **2026-10-07**. Written so that the
 difference between "built and tested", "deliberately stubbed" and "not started"
 is never a guess.
 
-**Tests: 103 passed (371 assertions). Pint clean.**
+**Tests: 129 passed (459 assertions). Pint clean.**
 
 ---
 
@@ -66,6 +66,29 @@ and `sw8` never written.
 
 **Account** — `get_user_account.php`, `update_account.php`,
 `update_account_details.php`.
+
+**Comments and chat** — the twelve endpoints `retrofit/ApiService.kt` actually
+calls: `get_comments`, `get_step_comments`, `get_comment_for_account_id`,
+`get_comment_threads`, `get_comment_receipts`, `comment_add_update`,
+`comment_star`, `comment_update_receipt`, `update_thread_subscriber`,
+`block_report_user`, `unblock_user`, `get_blocked_users`. The live directory
+holds twenty-odd more, several duplicates of each other (`get_comments 2.php`,
+`get_commentsX.php`), which nothing calls.
+
+The part worth knowing about is `Services/Chat/CommentVisibility`. The old
+reader does not return a thread's messages to its members — it returns the
+messages posted *while that member was subscribed*, so somebody who leaves a
+group and rejoins does not see what was said while they were away. That is a
+real promise in a recovery app and the easiest thing in this feature to lose by
+simplifying, so it has a class and five tests of its own.
+
+Four things changed on the way, each a hole:
+`comment_add_update.php` is `UPDATE comments SET comment = ?, deleted = ? WHERE
+id = ?` with no account clause, so anybody could rewrite or delete anybody's
+message by guessing an id; `block_report_user.php` takes the caller from
+`user_id` in the body; its INSERT is a duplicate-key error the second time
+somebody blocks the same person; and a receipt could be moved *backwards*, so a
+retry carrying a stale value un-read a message.
 
 **Other** — `get_counts.php`; `get_app_settings.php`, answering under `data`
 rather than `response`, which is the one endpoint in v19 that breaks its own
@@ -222,13 +245,12 @@ The twelve record endpoints and the auth family are the ones the new Flutter app
 and the sync engine need, so they came first. These are the remainder, and each
 is a known shape in the old scripts:
 
-* **comments / chat** — **unblocked.** §A2 and §A3 are answered by the schema
-  dump: `comment_thread_subscribers` is unique on `(thread_id, account_id)`, so
-  joining a thread is an upsert on that pair, and `subscribed_at` is a nullable
-  INT. The seven comment tables (`comments`, `comment_threads`,
-  `comment_thread_subscribers`, `..._history`, `comment_reactions`,
-  `comment_receipts`, `comment_stars`) plus `group_invites` and `blocked_users`
-  are all in the fixture now, so this is ready to write.
+* **the rest of chat** — group creation and invites (`create_invite.php`,
+  `redeem_invite.php`, `thread_subscribers_insert_csv.php`,
+  `update_thread_title_description.php`, `upload_icon_group.php`),
+  `send_chat_request.php`, `thread_admin_promote_demote.php`, typing indicators,
+  and `comment_reactions` writing. The reads of all of these are already served
+  by `get_comment_threads.php`.
 * **mark-as-reviewed** — nearly unblocked. `reviewed` turns out to be a table
   as well as a flag: `(inventory_id, sponsorid, type, tstamp)`. The one thing
   left is what the `type` values mean, since `inventory_id` is polymorphic

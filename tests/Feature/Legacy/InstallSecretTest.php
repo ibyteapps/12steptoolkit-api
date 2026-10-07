@@ -157,14 +157,11 @@ it('refuses a legacy-signed token for a device it cannot name', function () {
 });
 
 it('can be relaxed in one line for the cutover window', function () {
-    putenv('LEGACY_TOKENS_MAY_BOOTSTRAP=true');
+    config(['legacy.android.legacy_tokens_may_bootstrap' => true]);
 
-    try {
-        bootstrap($this, legacyToken($this))->assertOk();
-        expect(InstallSecret::query()->count())->toBe(1);
-    } finally {
-        putenv('LEGACY_TOKENS_MAY_BOOTSTRAP');
-    }
+    bootstrap($this, legacyToken($this))->assertOk();
+
+    expect(InstallSecret::query()->count())->toBe(1);
 });
 
 // ------------------------------------------------------------------ refusals

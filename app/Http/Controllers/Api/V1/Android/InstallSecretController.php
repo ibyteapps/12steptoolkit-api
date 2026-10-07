@@ -129,7 +129,11 @@ class InstallSecretController extends Controller
     /** True when this request's token identifies an account but may not authorise a new key. */
     private function mustNotMint(Request $request): bool
     {
-        if (filter_var(env('LEGACY_TOKENS_MAY_BOOTSTRAP', false), FILTER_VALIDATE_BOOL)) {
+        // Via config, not `env()`: `env()` returns null once `config:cache` has
+        // run, which it will have in production — so reading the switch directly
+        // would silently turn the rule *on* there regardless of the setting.
+        // Found by a test that passed alone and failed in the suite.
+        if (config('legacy.android.legacy_tokens_may_bootstrap')) {
             return false;
         }
 

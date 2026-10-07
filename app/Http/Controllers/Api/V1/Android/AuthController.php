@@ -266,7 +266,12 @@ class AuthController extends Controller
             return $identity === null ? null : Account::normaliseEmail($identity->email);
         }
 
-        if (! filter_var(env('LEGACY_SOCIAL_EMAIL_MATCH', false), FILTER_VALIDATE_BOOL)) {
+        // Via config, not `env()`: `env()` returns null once `config:cache` has
+        // run, so reading it directly would make this switch impossible to turn
+        // on in production. It fails safe either way — email-only sign-in stays
+        // refused — but a setting that silently does nothing is worse than no
+        // setting.
+        if (! config('legacy.android.social_email_match')) {
             return null;
         }
 

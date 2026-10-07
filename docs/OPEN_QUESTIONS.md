@@ -64,9 +64,16 @@ requests that verify against the wrong row.
 
 ### A5. What else the dump changed
 
-* **`tstamp` is `bigint` in every step-work table.** The clients send
-  milliseconds, so an int column would have overflowed 24 days after 1970 — it
-  was always bigint and my guess of int was simply wrong.
+* **`tstamp` is `bigint` in every step-work table — and holds *seconds*.** Not
+  milliseconds, which is what "bigint timestamp" reads as. `F.getTStamp()` in
+  the Android client is `Date().time / 1_000L` (`extras/F.kt:607`), and
+  `MorningsFragment` and `Nights.kt` divide too. The column is simply wider than
+  it needs to be. Worth having written down: `CommentVisibility` compares
+  `comments.tstamp` against `comment_thread_subscribers.subscribed_at` (an int,
+  also seconds), and assuming milliseconds there would widen every chat
+  visibility window by a factor of a thousand and let everybody read
+  everything. I made that assumption, wrote it into a commit message, and only
+  caught it by checking the client.
 * **`accounts.password` is `varchar(20)`.** The legacy plaintext column could
   never have held a long password. Worth knowing before anybody treats it as a
   credential store.
@@ -99,6 +106,27 @@ requests that verify against the wrong row.
 * **`sample`** is a one-column MyISAM table. It is junk and nothing reads it.
 
 ---
+
+### A7. The subscribe-interval history can never have more than one entry
+
+`get_comments.php` walks `comment_thread_subscribers` ordered by
+`subscribed_at, id` as a **history** of subscribe and unsubscribe transitions,
+and filters a thread's messages to the intervals when the reader was subscribed.
+It is a thoughtful design: leave a group and rejoin, and you do not see what was
+said while you were away.
+
+But that table is `UNIQUE (thread_id, account_id)`, so there is only ever one
+row per person per thread, and the walk always yields a single entry —
+`is_subscribed = 1` gives one open interval from the join time, `0` gives none.
+`comment_thread_subscriber_history` is presumably where the transitions were
+meant to live, and **no reader anywhere touches it**, which answers why that
+table exists and nothing reads it.
+
+`Services/Chat/CommentVisibility` implements the interval walk for any number
+of rows, so it behaves identically to the old reader today and becomes correct
+on its own terms the day something starts writing a real history. Nothing needs
+deciding; it is recorded so the next person does not mistake the dead history
+table for a bug or delete the interval logic as over-engineering.
 
 ### A6. A live content-corruption bug, found in the dump
 

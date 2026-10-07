@@ -77,6 +77,9 @@ return Application::configure(basePath: dirname(__DIR__))
 
         // Trust the Plesk/NGINX reverse proxy so request()->ip() is the client's
         // address — rate limiting depends on it. Narrow with TRUSTED_PROXIES.
+        //
+        // `env()` is correct *here* and nowhere else in the application: this
+        // file runs before the config is loaded, so there is no config to read.
         $middleware->trustProxies(at: env('TRUSTED_PROXIES', '127.0.0.1'));
     })
     ->withExceptions(function (Exceptions $exceptions): void {

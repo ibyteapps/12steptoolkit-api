@@ -78,6 +78,37 @@ return [
 
         // Nonces are kept for a little longer than the window, then swept.
         'nonce_retention_seconds' => (int) env('LEGACY_NONCE_RETENTION', 3600),
+
+        /*
+        | May a token signed with the legacy secret register a device and obtain
+        | a signing key?
+        |
+        | **No**, and that is what keeps the old server's placeholder JWT secret
+        | from becoming this server's problem: `19/jwt_verify.php:11` is
+        | `const JWT_SECRET = 'CHANGE_ME_TO_A_…'`, so anybody can mint one of
+        | those tokens for any account id. This application accepts them to
+        | identify an account — every install in the field holds one — and
+        | refuses to let one authorise a key. See docs/OPEN_QUESTIONS.md B0.
+        |
+        | True restores the old behaviour, for the cutover window if the
+        | refusals turn out to strand more real installs than expected.
+        */
+        'legacy_tokens_may_bootstrap' => filter_var(env('LEGACY_TOKENS_MAY_BOOTSTRAP', false), FILTER_VALIDATE_BOOL),
+
+        /*
+        | May a social sign-in be accepted on an email address alone, with no
+        | verified `id_token`?
+        |
+        | **No.** `login_google.php` takes an email and signs in whoever owns it,
+        | which is an account takeover by anybody who knows an address. The
+        | replacement verifies a Google or Apple identity token against the
+        | provider's JWKS.
+        |
+        | Kept switchable because the shipped Android client sends only an
+        | email (AND-005), so a short, logged transition window may be wanted
+        | during the cutover. The new Flutter client must send `id_token`.
+        */
+        'social_email_match' => filter_var(env('LEGACY_SOCIAL_EMAIL_MATCH', false), FILTER_VALIDATE_BOOL),
     ],
 
     /*
