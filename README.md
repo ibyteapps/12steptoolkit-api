@@ -58,9 +58,9 @@ the adopted ones:
   `apple_notifications`, `google_notifications`, `revenuecat_events`,
   `complimentary_grants`
 
-`install_secrets` is the exception worth knowing about: it was added by the
-2024 Android security patch set and this application treats it as adopted, not
-as its own. See `docs/OPEN_QUESTIONS.md`.
+`install_secrets` is the exception worth knowing about: it was added by the 2024
+Android security patch set, it **is** in production (confirmed from the schema
+dump), and this application treats it as adopted rather than as its own.
 
 ### The .env values that matter
 
@@ -87,11 +87,17 @@ php vendor/bin/pint --test           # formatting, check only
 ```
 
 The suite runs against an in-memory SQLite database. The adopted tables do not
-exist there, so `tests/Support/LegacySchema.php` reconstructs them before each
-test. **That file is a test fixture and a reference, never a migration** — it
-is the written-down version of what this application believes the production
-schema to be, and the only way to find out that the belief is wrong. Read its
-header before trusting a column type.
+exist there, so `tests/Support/LegacySchema.php` builds them before each test.
+**That file is a test fixture and a reference, never a migration** — and since
+2026-10-07 it is a *transcription* of `docs/reference/legacy-schema.sql`, the
+real structure-only dump, rather than a reconstruction from the old PHP.
+
+That change paid for itself immediately. `install_secrets` has
+`UNIQUE (account_id, device_id)` where the fixture had a plain index, so
+`bootstrap_secret.php`'s rotation — revoke the old row, insert a new one —
+passed every test and would have failed with a duplicate-key error on the first
+real rotation in production. Which is the whole argument for keeping the
+reconstruction runnable rather than writing it in prose.
 
 What the 88 cover:
 
@@ -151,7 +157,8 @@ what it means. Exit code 1 on any failure, so it can be the body of a monitor.
 | `ARCHITECTURE.md` | why the old contract is the main one, how the three applications are kept apart, what each legacy hole was and what replaced it |
 | `IMPLEMENTATION_STATUS.md` | what is built, what is stubbed, what is not started |
 | `docs/CUTOVER.md` | the order of the switch-over, and how to switch back |
-| `docs/OPEN_QUESTIONS.md` | the things that cannot be answered by reading code, each with the one command or screen that answers it |
+| `docs/OPEN_QUESTIONS.md` | the things that cannot be answered by reading code, each with the one command or screen that answers it — section A is now closed by the schema dump, and A6 is a live bug it turned up |
+| `docs/reference/legacy-schema.sql` | the real schema of `data_12steptoolkit`, structure only. The authoritative reference for every column type in this application |
 
 ## What is deliberately not here
 

@@ -4,7 +4,7 @@ Honest state of the Laravel layer as of **2026-10-07**. Written so that the
 difference between "built and tested", "deliberately stubbed" and "not started"
 is never a guess.
 
-**Tests: 88 passed (320 assertions). Pint clean.**
+**Tests: 95 passed (350 assertions). Pint clean.**
 
 ---
 
@@ -62,6 +62,21 @@ can mass-assign into a table holding somebody's recovery.
 All five run, and none of them names an adopted table:
 framework tables, `account_security`, the auth tables, the console tables, the
 billing tables. `README.md` lists what each creates.
+
+### The schema fixture
+
+`tests/Support/LegacySchema.php` is a transcription of
+`docs/reference/legacy-schema.sql` — the real structure-only dump of
+`data_12steptoolkit`, 41 tables, taken 2026-10-07 — rather than the
+reconstruction from the old PHP that it was before. Every column type in this
+application is now read off the database instead of inferred from a
+`bind_param` string.
+
+It caught one bug on arrival (`install_secrets`' unique key versus the
+rotation), corrected `tstamp` to `bigint` across all six collections, and turned
+up A6: `nights` and `mornings` are latin1 while the connection is utf8mb4, so
+every curly apostrophe iOS inserts into a nightly review is stored as `?`.
+`app:check` now reports that on every run.
 
 ### Entitlements — the three-source resolver
 
@@ -182,11 +197,18 @@ The twelve record endpoints and the auth family are the ones the new Flutter app
 and the sync engine need, so they came first. These are the remainder, and each
 is a known shape in the old scripts:
 
-* **mark-as-reviewed** — blocked on `docs/OPEN_QUESTIONS.md` §C2 (`shared`
-  versus `reviewed`). I would rather ask than get it backwards.
-* **comments / chat** — blocked on §A2 and §A3
-  (`comment_thread_subscribers`), which decide whether the subscriber insert is
-  an `insertOrIgnore` or a `firstOrCreate`.
+* **comments / chat** — **unblocked.** §A2 and §A3 are answered by the schema
+  dump: `comment_thread_subscribers` is unique on `(thread_id, account_id)`, so
+  joining a thread is an upsert on that pair, and `subscribed_at` is a nullable
+  INT. The seven comment tables (`comments`, `comment_threads`,
+  `comment_thread_subscribers`, `..._history`, `comment_reactions`,
+  `comment_receipts`, `comment_stars`) plus `group_invites` and `blocked_users`
+  are all in the fixture now, so this is ready to write.
+* **mark-as-reviewed** — nearly unblocked. `reviewed` turns out to be a table
+  as well as a flag: `(inventory_id, sponsorid, type, tstamp)`. The one thing
+  left is what the `type` values mean, since `inventory_id` is polymorphic
+  across inventories, amends and nights — one `GROUP BY type` settles it
+  (§C2).
 * **sponsorship** — the directory, requests, accept/decline, the country facets.
 * **icons** — profile pictures, streamed by the application from outside the web
   root exactly as the old scripts do, which is what makes "only people who may
@@ -272,7 +294,8 @@ Things that are *as intended* and might look like oversights:
 * **No entitlement check on the sync path.** Deliberate — D-001, cloud backup is
   free for everyone. `SYNC_NEEDS_SUBSCRIPTION` exists so that changing that
   would be a visible act.
-* **`sw8` is never written.** Cautious in the direction that cannot fail (§A1).
+* **`sw8` is never written.** Confirmed correct: the column does not exist
+  (§A1). Eleven switches, twelve answers.
 * **`accounts.subscribed` is set and never cleared.** Writing it keeps somebody
   who buys on 2.0 from being told they are not subscribed when they open 1.9.0.
   Clearing it would take access away from people who have it today, which is a

@@ -1,13 +1,13 @@
 # Open questions
 
-Everything in this file is something that **cannot be answered by reading
-code** — I have read both script trees, both app repositories and the security
-patch set, and the answer is not in any of them. Each one has the one command or
-the one screen that settles it.
+Things that **cannot be answered by reading code** — I have read both script
+trees, both app repositories and the security patch set, and the answer is not
+in any of them. Each one carries the one command or screen that settles it.
 
-None of them block the application from running or the tests from passing. All
-of them are things that would be found out the hard way at cutover, so they are
-written down instead.
+**Section A is now answered**, by the structure-only schema dump of 2026-10-07
+(`docs/reference/legacy-schema.sql`). It is kept here rather than deleted
+because two of its answers changed the code — and because A6, which the dump
+turned up unasked, is a live bug that is corrupting what people write.
 
 Each entry says what this application does *in the meantime*, and in every case
 the meantime behaviour is the safe one: nothing is assumed in a direction where
@@ -15,91 +15,135 @@ being wrong loses data or access.
 
 ---
 
-## A. The schema
+## A. The schema — **answered**
 
-There is **no schema dump of `data_12steptoolkit` anywhere** — not in either
-script tree, not in the app repositories, not in the security patch set. Column
-*names* are solid: every one is read off an INSERT or UPDATE column list in the
-live PHP and cross-checked between the two APIs. Column *types* are inferred
-from `bind_param` type strings (`i` or `s`, which cannot tell INT from TINYINT,
-or VARCHAR from TEXT from DATETIME) and from the casts the readers apply.
+`docs/reference/legacy-schema.sql` is a structure-only dump of the live
+`data_12steptoolkit` (MariaDB 11.4, 2026-10-07, 41 tables, no rows and no
+credentials). Everything in this section was open until it arrived.
 
-`tests/Support/LegacySchema.php` is the written-down version of what this
-application believes the schema to be. One command replaces the belief with
-fact:
+`tests/Support/LegacySchema.php` is now a **transcription** of that dump rather
+than a reconstruction, which changes what the test suite is worth: it was
+holding the application to my reading of the old PHP, and now it holds it to the
+database.
 
-```bash
-mysqldump --no-data --skip-add-drop-table --skip-comments data_12steptoolkit > schema.sql
+### A1. Does `nights.sw8` exist? — **No.**
+
+Eleven switches (`sw1`–`sw7`, `sw9`–`sw12`), twelve answers (`desc1`–`desc12`).
+So question 8 has an answer column and no switch, and never had one. The
+implementation already never wrote it, which was the cautious direction and
+turns out to have been the correct one.
+
+### A2. Is `comment_thread_subscribers` unique on `(thread_id, account_id)`? — **Yes.**
+
+`UNIQUE KEY uq_thread_account (thread_id, account_id)`. So joining a thread is
+an upsert on that pair: an insert would be a duplicate-key error on the second
+reply, and a check-then-insert would race. This unblocks the comments and chat
+endpoints.
+
+### A3. Is `comment_thread_subscribers.subscribed_at` an INT or a DATETIME? — **INT, nullable.**
+
+A Unix timestamp. Unblocks the same endpoints.
+
+### A4. Does `install_secrets` exist? — **Yes, and this one found a bug.**
+
+It exists, which settles the biggest question on this list: the 2024 security
+patch set's *schema* did ship, whatever happened to the rest of it. `devices`
+and `password_resets` are there too. So the Android cutover is not blocked.
+
+But it carries `UNIQUE KEY uq_account_device (account_id, device_id)`, and the
+fixture had a plain index. The original `bootstrap_secret.php` rotation — mark
+the old row revoked, insert a new one beside it — passed every test here and
+**would have thrown a duplicate-key error on the first real rotation in
+production**. The secret is now replaced in place, which the table was telling
+us all along is the right model: one live signing key per install, and rotating
+it ends the old one at the same instant.
+
+`device_id` is `varchar(128)`, not the 191 I had assumed; longer ids are now
+refused rather than silently truncated, because a truncated device id signs
+requests that verify against the wrong row.
+
+### A5. What else the dump changed
+
+* **`tstamp` is `bigint` in every step-work table.** The clients send
+  milliseconds, so an int column would have overflowed 24 days after 1970 — it
+  was always bigint and my guess of int was simply wrong.
+* **`accounts.password` is `varchar(20)`.** The legacy plaintext column could
+  never have held a long password. Worth knowing before anybody treats it as a
+  credential store.
+* **`accounts` has no index on `email`, `fbid`, `googleid` or `appleid`.** Every
+  email and social sign-in is a full table scan, and `LOWER(email) = ?` could
+  not use an index even if one existed. Adding one is an `ALTER` on an adopted
+  table, so it needs your say-so — see **D1** below.
+* **`inventories`, `amends` and `mornings` have no index on `accountid`.** Only
+  the primary key. So every read of somebody's Fourth Step scans the table.
+  `journals`, `gratitudes` and `nights` do have one.
+* **`nights` is indexed on `(accountid, tdate)`, not `tstamp`** — the only
+  collection whose index disagrees with the column the reader orders by.
+* **`accounttype` is `1 = AA, 2 = NA`.** There is a Narcotics Anonymous mode in
+  the data model. Neither shipped app's UI exposes it as far as I can tell.
+* **`devicetype` has a third value: `3 = Web`.**
+* **There are two settings tables** — `appsettings` (the one-row table of limits
+  both apps read) and `app_settings` (key/value, added later, which I cannot
+  find a reader for in either client). And the sale appears twice:
+  `appsettings.SALE_*` and a `sale` table.
+* **`reviewed` is a table as well as a flag** — `(inventory_id, sponsorid, type,
+  tstamp)`. That largely answers C2; see below.
+* **`account_details` stores one question three ways**:
+  `accept_new_sponsees` is a varchar holding `'true'`/`'false'`, while
+  `accept_new_sponsor` and `accept_new_chat` beside it are ints.
+* **`sponsors.rejected_tstamp`** is commented "also used to signify accepted by
+  id if status = 0" — one column holding a timestamp or an account id depending
+  on another column.
+* **`notification_texts`** has a STORED generated column
+  (`unhex(md5(description))`) carrying its unique key, and a FULLTEXT index.
+* **`sample`** is a one-column MyISAM table. It is junk and nothing reads it.
+
+---
+
+### A6. A live content-corruption bug, found in the dump
+
+**This is the most important thing the schema turned up, and it is happening
+today.**
+
+`nights` and `mornings` are **latin1** tables. `appsettings` and `quotes` are
+too. Everything else that holds writing — `inventories`, `amends`, `journals`,
+`gratitudes`, `comments` — is utf8mb4. And `19/db.php` sets the connection to
+`utf8mb4`.
+
+A character that utf8mb4 can carry and latin1 cannot is therefore **converted on
+the way in and stored as `?`**. That includes every emoji, every curly
+apostrophe and quotation mark, every em dash, and every non-Latin script.
+
+iOS replaces a typed apostrophe with U+2019 automatically. So:
+
+> "I didn't drink today" → **"I didn?t drink today"**
+
+in the nightly review and the morning notes, for every iOS user, every day —
+while the same sentence typed into the journal is stored perfectly, because
+`journals` is utf8mb4. That asymmetry is why nobody has traced it: the app looks
+like it works, and only one feature quietly mangles what people write.
+
+**The fix is one statement per table**, and it is correct rather than risky: the
+stored bytes are already valid latin1 (the conversion happened at write time),
+so `CONVERT TO CHARACTER SET` re-encodes them faithfully.
+
+```sql
+ALTER TABLE nights   CONVERT TO CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+ALTER TABLE mornings CONVERT TO CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+ALTER TABLE quotes   CONVERT TO CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 ```
 
-Run it, put the output somewhere I can read, and A1–A3 below are answered in
-one pass along with every type in that file.
+Three things before you run it:
 
-### A1. Does `nights.sw8` exist?
+1. **Back those tables up first.** Data, not just structure.
+2. **It is an `ALTER` on an adopted table**, which is the one thing this
+   application does not do on its own initiative. So it is your call, not mine.
+3. **The `?`s already written are gone for good.** The original characters were
+   discarded at write time; nothing can recover them. Converting stops it
+   happening again, and that is all it does.
 
-**Why it matters.** The nightly inventory has twelve questions and the switch
-columns are `sw1..sw7, sw9..sw12` — eleven of them. `sw8` is skipped. Both
-shipped clients omit it, and both APIs' INSERT lists omit it, which is
-consistent with the column having never been created and also consistent with
-it existing and being dead.
+`php artisan app:check` reports this every time it runs until it is fixed.
 
-**What this application does.** `Night::SWITCHES` has eleven entries and
-`sw8` is **never written**, even if a client sends it (there is a test for
-exactly that). If the column exists it stays at its default for ever, which is
-harmless. If it does not exist, writing it would be a fatal error on every
-nightly save — so the cautious direction is the one taken.
-
-**What answers it.** `SHOW COLUMNS FROM nights LIKE 'sw%';`
-
-### A2. Is `comment_thread_subscribers` unique on `(thread_id, account_id)`?
-
-**Why it matters.** The comment/chat code inserts a subscriber row without
-checking for one. If there is a unique index, the second insert is a duplicate-
-key error; if there is not, the table grows a row per reply and notifications go
-out twice, three times, *n* times.
-
-**What this application does.** The comments surface is not built yet
-(`IMPLEMENTATION_STATUS.md` §3), so nothing depends on the answer today. It has
-to be settled before that endpoint is written, because the two cases need
-different code (`insertOrIgnore` versus a `firstOrCreate`).
-
-**What answers it.** `SHOW INDEXES FROM comment_thread_subscribers;`
-
-### A3. Is `comment_thread_subscribers.subscribed_at` an INT or a DATETIME?
-
-Both APIs bind it as `s`, which tells us nothing — a Unix timestamp and a
-`'2019-06-01 12:00:00'` string are both `s`. Every other timestamp in this
-schema is an INT Unix timestamp *except* `created` and `modified`, which are
-DATETIME, so there is no pattern to infer from.
-
-**What answers it.** The same `SHOW COLUMNS`.
-
-### A4. Does `install_secrets` exist in production?
-
-**Why it matters.** This is the biggest of the five and it is not really a
-schema question. `install_secrets` was introduced by the **2024 Android
-security patch set**, which I found in the scripts folder and which — as far as
-I can tell from the live scripts — **was never deployed**. `19/Ztest_jwt.php`
-is still present. `signature_checker.php` (the one that does replay protection
-properly) is still not included by any endpoint.
-
-If the patch set never shipped, then:
-
-* `install_secrets` does not exist, and
-* the shipped Android 1.9.0's `bootstrap_secret.php` call has been failing, and
-* the HMAC signature has never actually been verified in production.
-
-**What this application does.** It treats `install_secrets` as adopted — reads
-and writes `account_id`, `device_id`, `secret` BINARY(32), `status` — and
-requires an active row for every signed request. If the table does not exist,
-`php artisan migrate` will not create it (adopted tables are never created by a
-migration here) and every signed request fails closed. **That is a cutover
-blocker and it is the one thing on this list that will stop the Android app
-working on day one.**
-
-**What answers it.** `SHOW TABLES LIKE 'install_secrets';` — and if the answer
-is "no", say so and I will add a migration that creates it, which is safe
-because a table that has never existed is not a legacy table.
 
 ---
 
@@ -190,20 +234,34 @@ through the RevenueCat read-only bridge.
 **What answers it.** Play Console → Monetize → Subscriptions, or RevenueCat →
 Products. Paste the list and I will fill it in.
 
-### C2. `inventories.shared` and `inventories.reviewed` — which is which?
+### C2. `shared` versus `reviewed` — mostly answered, one bit left
 
-Both are tinyints on `inventories` and `amends` and both appear in the old
-writers. `shared` has a `shareddate` beside it; `reviewed` does not.
+The dump settles the shape. `inventories.shared` has `shareddate` beside it and
+is commented *"Step 4 Shared? 0 = No, 1 = Yes"*, so it means **shown to my
+sponsor**. `reviewed` is a flag on the record **and** a table of its own:
 
-My reading is that `shared` means "shown to my sponsor" (hence the date) and
-`reviewed` means "my sponsor has marked this as gone through". But the
-mark-as-reviewed endpoint is one of the ones I have not built yet, and the two
-apps' UIs use the words differently in their strings, so I would rather ask than
-guess — getting it backwards means an inventory showing as reviewed when it has
-only been shared, which is exactly the kind of wrong that matters in step work.
+```
+reviewed (inventory_id, sponsorid, type, tstamp)
+```
 
-**What answers it.** You, in one sentence. Or the sponsor-facing screen in the
-shipped app, if you can tell me what the two states look like to a sponsor.
+So "reviewed" records *which sponsor* marked it and *when* — which only makes
+sense as **my sponsor has been through this**. That is the reading I had, now
+with evidence.
+
+The one bit left: **what the `type` values mean.** `inventories`, `amends` and
+`nights` all carry a `reviewed` flag, and `reviewed.inventory_id` with a `type`
+beside it is a polymorphic reference across them. I need the mapping before the
+mark-as-reviewed endpoint can be written, or a sponsor marking an amend will
+mark somebody's nightly review instead.
+
+**What answers it.** One query:
+
+```sql
+SELECT type, COUNT(*) FROM reviewed GROUP BY type;
+```
+
+Three distinct values and their counts, against the row counts of the three
+tables, will tell us which is which.
 
 ### C3. Should a cancellation clear `accounts.subscribed`?
 
@@ -259,7 +317,54 @@ day of real traffic.
 
 ---
 
-## D. Confirmed, recorded here so nobody re-opens them
+## D. Changes to the live database I recommend but will not make
+
+This application never alters an adopted table, which is what keeps the cutover
+reversible. These are the three I would nonetheless put to you, in order. Each
+is reversible, each needs a backup first, and none of them is urgent except the
+first.
+
+### D1. Fix the latin1 tables
+
+A6 above, in full. It is corrupting what people write, today. The other two are
+performance; this one is content.
+
+### D2. Index the columns every sign-in searches
+
+`accounts` has no index on `email`, `fbid`, `googleid` or `appleid`, so every
+sign-in of every kind is a full table scan. On a table this size that is
+survivable and getting slower.
+
+```sql
+ALTER TABLE accounts
+  ADD KEY ix_accounts_email (email),
+  ADD KEY ix_accounts_googleid (googleid),
+  ADD KEY ix_accounts_appleid (appleid),
+  ADD KEY ix_accounts_fbid (fbid);
+```
+
+Adding an index changes no data and no behaviour, and it can be dropped again in
+one statement. Note that the application's `LOWER(email) = ?` lookup still will
+not use it — matching the old scripts' own comparison is worth more than the
+index, so that query stays as it is until the legacy paths are off.
+
+### D3. Index the three step-work tables that have nothing
+
+`inventories`, `amends` and `mornings` have only a primary key, so reading one
+person's Fourth Step scans every row of everybody's.
+
+```sql
+ALTER TABLE inventories ADD KEY ix_inventories_account_time (accountid, tstamp);
+ALTER TABLE amends      ADD KEY ix_amends_account_time (accountid, tstamp);
+ALTER TABLE mornings    ADD KEY ix_mornings_account_time (accountid, tstamp);
+```
+
+This is the same index `journals`, `gratitudes` and `nights` already have, so it
+is a consistency fix as much as a speed one.
+
+---
+
+## E. Confirmed, recorded here so nobody re-opens them
 
 * **Bundle identifiers are unchanged.** `com.ibyteapps.aa12steptoolkit`
   (Android) and `com.12stepapp.recoverybox` (iOS). Changing either would be a

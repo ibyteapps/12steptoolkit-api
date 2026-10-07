@@ -45,6 +45,9 @@ class CheckCommand extends Command
         $this->section('The adopted tables');
         $this->adoptedTables();
 
+        $this->section('Character sets');
+        $this->charsets();
+
         if ($this->option('legacy')) {
             $this->section('The adopted columns');
             $this->adoptedColumns();
@@ -113,8 +116,11 @@ class CheckCommand extends Command
     private function adoptedTables(): void
     {
         foreach ([
-            'accounts', 'account_details', 'appsettings',
+            'accounts', 'account_details', 'appsettings', 'app_settings', 'serverstatus',
             'inventories', 'amends', 'nights', 'mornings', 'journals', 'gratitudes',
+            'reviewed', 'sponsors', 'comments', 'comment_threads', 'comment_thread_subscribers',
+            'reported_users', 'blocked_users', 'icons', 'devices', 'reminder_subscriptions',
+            'orders', 'subscription_orders', 'sponsee_orders', 'sponsee_order_users',
         ] as $table) {
             $this->check($table, function () use ($table): string {
                 if (! Schema::hasTable($table)) {
@@ -140,11 +146,23 @@ class CheckCommand extends Command
 
             $active = InstallSecret::query()->where('status', InstallSecret::ACTIVE)->count();
 
+            // One row per (account, device) is enforced by uq_account_device.
+            // If that key is missing, rotation can leave two live keys for one
+            // install and whichever verifies first wins.
+            if (DB::connection()->getDriverName() === 'mysql') {
+                $unique = collect(DB::select('SHOW INDEXES FROM install_secrets'))
+                    ->contains(fn ($i) => (int) $i->Non_unique === 0 && $i->Key_name !== 'PRIMARY');
+
+                if (! $unique) {
+                    throw new \RuntimeException('exists, but has no UNIQUE (account_id, device_id) — rotation is unsafe');
+                }
+            }
+
             if ($active === 0 && Account::query()->count() > 0) {
                 throw new \RuntimeException('exists but holds no active secret — no Android install can sign a request yet');
             }
 
-            return number_format($active).' active';
+            return number_format($active).' active, one row per device enforced';
         });
     }
 
@@ -153,6 +171,65 @@ class CheckCommand extends Command
      * Slow and noisy, which is why it is behind `--legacy`: it is the check to
      * run once, the first time this application meets the real database.
      */
+    /**
+     * The live finding this command exists to make visible.
+     *
+     * `nights` and `mornings` are **latin1** while the rest of the database is
+     * utf8mb4 and the v19 connection sets utf8mb4. So a character outside
+     * latin1 written into a nightly review's twelve answers, or into the
+     * morning notes, is converted on the way in and becomes `?`. iOS turns a
+     * typed apostrophe into U+2019 automatically, so "I didn't" is stored as
+     * "I didn?t" — every day, for every iOS user, in the one feature they use
+     * every day.
+     *
+     * It cannot be fixed from here: `ALTER TABLE ... CONVERT TO CHARACTER SET`
+     * alters an adopted table, which this application does not do on its own.
+     * So it is reported, loudly, every time somebody runs this.
+     */
+    private function charsets(): void
+    {
+        if (DB::connection()->getDriverName() !== 'mysql') {
+            $this->line('  <fg=gray>·</> skipped — only meaningful against MySQL/MariaDB</>');
+
+            return;
+        }
+
+        // Tables holding text somebody typed. The rest can be any charset.
+        $holdsWriting = [
+            'nights' => 'the twelve nightly answers',
+            'mornings' => 'the morning notes',
+            'inventories' => 'titles, descriptions, fault and apology notes',
+            'amends' => 'the amend and its notes',
+            'journals' => 'journal entries',
+            'gratitudes' => 'gratitude lists',
+            'comments' => 'chat and sponsor comments',
+            'quotes' => 'the daily quotes',
+        ];
+
+        $rows = DB::select(
+            'SELECT TABLE_NAME AS t, TABLE_COLLATION AS c FROM information_schema.TABLES
+             WHERE TABLE_SCHEMA = ? AND TABLE_NAME IN ('.implode(',', array_fill(0, count($holdsWriting), '?')).')',
+            [DB::connection()->getDatabaseName(), ...array_keys($holdsWriting)],
+        );
+
+        foreach ($rows as $row) {
+            $table = (string) $row->t;
+            $collation = (string) $row->c;
+
+            $this->check($table, function () use ($collation, $table, $holdsWriting): string {
+                if (! str_starts_with($collation, 'utf8mb4')) {
+                    throw new \RuntimeException(
+                        $collation.' — '.$holdsWriting[$table].' cannot hold an emoji, a curly '
+                        ."apostrophe or any non-Latin script. They become '?' on write. "
+                        .'See docs/OPEN_QUESTIONS.md'
+                    );
+                }
+
+                return $collation;
+            });
+        }
+    }
+
     private function adoptedColumns(): void
     {
         $expected = [
