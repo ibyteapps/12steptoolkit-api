@@ -2,7 +2,9 @@
 
 namespace App\Http\Controllers\Api\V1\Android;
 
+use App\Http\Middleware\VerifyLegacyJwt;
 use App\Models\InstallSecret;
+use App\Services\Legacy\LegacyEnvelope;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -17,6 +19,35 @@ use Illuminate\Http\Request;
  * replay protection and device binding but not a second factor. Changing it
  * needs a client release, and it is written down in `docs/OPEN_QUESTIONS.md`
  * rather than quietly left as if it were fine.
+ *
+ * ## A forged legacy token cannot get a key out of this
+ *
+ * The live server's JWT secret is the library's template placeholder
+ * (`19/jwt_verify.php:11`), so anybody can sign a token for any account id.
+ * This application must accept those tokens — every install in the field holds
+ * one — and this endpoint is the single place where holding one could turn into
+ * holding a signing key, and therefore into reading somebody's Fourth Step.
+ *
+ * So the provenance recorded by `VerifyLegacyJwt` decides what may happen:
+ *
+ *  * **a token this server issued** can create a binding and rotate a key;
+ *  * **a token signed with the legacy secret** can only retrieve a key for a
+ *    `(account_id, device_id)` pair that **already exists**. It cannot register
+ *    a new device and it cannot rotate.
+ *
+ * Which leaves a forger needing a real install's `device_id` — a value that
+ * only ever exists on that phone and is never sent anywhere else — before the
+ * endpoint will tell them anything. And without a key they cannot sign, and
+ * every endpoint that touches step work requires a signature.
+ *
+ * The cost is one real case: somebody on Android 1.9.0 who clears their app data
+ * keeps their old token but loses their device binding, and will be refused here
+ * until they sign in again. That is a sign-in, not a loss — their writing is on
+ * the server and comes back with them — and it is the correct trade against
+ * leaving the only door a forged token opens unlocked.
+ *
+ * `LEGACY_TOKENS_MAY_BOOTSTRAP=true` restores the old behaviour in one line, for
+ * the cutover window if the refusals turn out to be louder than expected.
  *
  * ## One row per (account, device), because the table says so
  *
@@ -52,28 +83,29 @@ class InstallSecretController extends Controller
 
         $rotate = filter_var($request->input('rotate', false), FILTER_VALIDATE_BOOL);
 
-        $existing = $rotate ? null : InstallSecret::query()
+        $active = InstallSecret::query()
             ->where('account_id', $account->id)
             ->where('device_id', $deviceId)
             ->where('status', InstallSecret::ACTIVE)
             ->first();
 
-        if ($existing !== null) {
+        // See the note above. A legacy-signed token may read an existing
+        // binding and nothing else.
+        if ($this->mustNotMint($request) && ($active === null || $rotate)) {
+            return LegacyEnvelope::fail('Sign in again to register this device', 403);
+        }
+
+        if ($active !== null && ! $rotate) {
             return response()->json([
-                'secret' => base64_encode((string) $existing->getRawOriginal('secret')),
+                'secret' => base64_encode((string) $active->getRawOriginal('secret')),
                 'rotated' => false,
             ]);
         }
 
-        // Did this install already hold a key? That is what `rotated` means to
-        // the client — "your previous secret has stopped working" — so a first
-        // issue must not claim it, or a client that clears its outbox on a
+        // `rotated` means "your previous secret has stopped working", so a
+        // first issue must not claim it: a client that clears its outbox on a
         // rotation would throw away writes it had not sent yet.
-        $replaced = InstallSecret::query()
-            ->where('account_id', $account->id)
-            ->where('device_id', $deviceId)
-            ->where('status', InstallSecret::ACTIVE)
-            ->exists();
+        $replaced = $active !== null;
 
         $secret = random_bytes(32);
 
@@ -92,5 +124,15 @@ class InstallSecretController extends Controller
         );
 
         return response()->json(['secret' => base64_encode($secret), 'rotated' => $replaced]);
+    }
+
+    /** True when this request's token identifies an account but may not authorise a new key. */
+    private function mustNotMint(Request $request): bool
+    {
+        if (filter_var(env('LEGACY_TOKENS_MAY_BOOTSTRAP', false), FILTER_VALIDATE_BOOL)) {
+            return false;
+        }
+
+        return $request->attributes->get('legacy_token_provenance') === VerifyLegacyJwt::FROM_LEGACY;
     }
 }

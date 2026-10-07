@@ -7,7 +7,6 @@ use App\Models\Account;
 use App\Models\AccountDetail;
 use App\Models\SignIn;
 use App\Services\Legacy\LegacyEnvelope;
-use App\Services\Legacy\LegacyJwt;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -283,7 +282,33 @@ class AuthController extends Controller
         string $message = 'ok',
         array $extra = [],
     ): JsonResponse {
-        $issued = LegacyJwt::make()->issue((int) $account->id);
+        /*
+         | A Sanctum token, not a legacy JWT — and that one line is what keeps
+         | the old server's placeholder JWT secret from becoming this server's
+         | problem.
+         |
+         | `19/jwt_verify.php:11` is `const JWT_SECRET = 'CHANGE_ME_TO_A_…'`, so
+         | anybody can sign a token for any account id. This application still
+         | has to *accept* those, because every install in the field holds one.
+         | What it can stop doing is *issuing* them — and then "legacy format"
+         | means "not from here", exactly, with nothing to look up.
+         | `VerifyLegacyJwt` reads that distinction and `bootstrap_secret.php`
+         | acts on it: only a token from here may register a device and obtain a
+         | signing key.
+         |
+         | Safe because the shipped Android client treats the token as opaque.
+         | Traced, not assumed: `ui/LoginActivity.kt:184` reads
+         | `map["access_token"]` as a string and `map["expires_at"]` separately,
+         | `auth/TokenStore.kt:84` stores the pair, and nothing anywhere decodes
+         | it — no `split(".")`, no Base64, no JWT library on the client at all.
+         | The same shape goes back; only the bytes inside change.
+         */
+        $token = $account->createToken(
+            name: (string) ($request->header('X-Device-Name') ?: 'App'),
+            expiresAt: now()->addDays((int) config('toolkit.auth.token_ttl_days')),
+        );
+
+        $this->pruneTokens($account);
 
         $security = $account->securityRow();
         $changes = [
@@ -309,8 +334,31 @@ class AuthController extends Controller
 
         return LegacyEnvelope::ok([
             'account_id' => (int) $account->id,
-            'access_token' => $issued['access_token'],
-            'expires_at' => $issued['expires_at'],
+            'access_token' => $token->plainTextToken,
+            // Seconds since the epoch, which is what the client reads it as.
+            'expires_at' => $token->accessToken->expires_at?->timestamp ?? 0,
         ] + $extra, $message);
+    }
+
+    /**
+     * Keep the newest `max_tokens_per_user` and drop the rest.
+     *
+     * The old system had no revocation list and a 296,000,000-second lifetime,
+     * so every sign-in a person ever made was still a live key to their account.
+     * A cap is the cheap half of fixing that; the TTL is the other half.
+     */
+    private function pruneTokens(Account $account): void
+    {
+        $keep = max(1, (int) config('toolkit.auth.max_tokens_per_user'));
+
+        $stale = $account->tokens()
+            ->orderByDesc('created_at')
+            ->skip($keep)
+            ->take(100)
+            ->pluck('id');
+
+        if ($stale->isNotEmpty()) {
+            $account->tokens()->whereIn('id', $stale)->delete();
+        }
     }
 }

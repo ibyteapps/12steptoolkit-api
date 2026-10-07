@@ -2,6 +2,7 @@
 
 use App\Models\Account;
 use App\Models\AccountSecurity;
+use App\Models\PersonalAccessToken;
 use App\Models\SignIn;
 use App\Services\Legacy\LegacyJwt;
 use Illuminate\Support\Facades\Hash;
@@ -14,8 +15,27 @@ it('creates an anonymous account and issues a token', function () {
     $accountId = $response->json('response.account_id');
     expect($accountId)->toBeInt()->toBeGreaterThan(0);
 
+    $token = $response->json('response.access_token');
+
     // The token works, and names that account.
-    expect(LegacyJwt::make()->accountId($response->json('response.access_token')))->toBe($accountId);
+    $personal = PersonalAccessToken::findToken($token);
+    expect($personal)->not->toBeNull()
+        ->and((int) $personal->tokenable_id)->toBe($accountId);
+
+    /*
+     | And it is **not** a legacy JWT, which is the security property rather
+     | than a style preference. The old server's JWT secret is the library's
+     | template placeholder, so anybody can mint one of those; issuing Sanctum
+     | tokens is what makes "legacy format" mean "did not come from here", which
+     | is what `bootstrap_secret.php` relies on to refuse a forged token a
+     | signing key.
+     |
+     | Safe because the shipped client treats the token as opaque —
+     | `LoginActivity.kt:184` reads the string, `TokenStore.kt:84` stores it,
+     | and nothing decodes it.
+     */
+    expect(LegacyJwt::make()->accountId($token))->toBeNull()
+        ->and($token)->toContain('|');
 
     $account = Account::query()->find($accountId);
     expect($account->sociallogin)->toBe(Account::SOCIAL_ANONYMOUS);
@@ -31,7 +51,30 @@ it('does not issue a nine-year token', function () {
     $ttl = $response->json('response.expires_at') - time();
 
     // `issue_jwt()` is called with 296,000,000 seconds by every legacy login.
-    expect($ttl)->toBeLessThan(90 * 86400);
+    expect($ttl)->toBeLessThan(90 * 86400)->toBeGreaterThan(86400);
+});
+
+it('keeps expires_at as the seconds the client reads', function () {
+    // `LoginActivity.kt:186` is `map["expires_at"]?.toLongOrNull()`, so this has
+    // to stay an integer number of seconds and not become an ISO string.
+    $at = $this->post('/api/v1/android/19/login_new_account.php', [])->json('response.expires_at');
+
+    expect($at)->toBeInt()->toBeGreaterThan(time());
+});
+
+it('caps how many tokens one account can accumulate', function () {
+    // The old system had no revocation list and a nine-year lifetime, so every
+    // sign-in anybody ever made was still a live key to their account.
+    config(['toolkit.auth.max_tokens_per_user' => 3]);
+
+    $id = $this->post('/api/v1/android/19/login_new_account.php', [])->json('response.account_id');
+    $account = Account::query()->find($id);
+
+    foreach (range(1, 5) as $i) {
+        $this->post('/api/v1/android/19/login_upgrade.php', ['account_id' => $id]);
+    }
+
+    expect($account->tokens()->count())->toBeLessThanOrEqual(3);
 });
 
 it('signs in with a password and upgrades a plaintext one to bcrypt', function () {

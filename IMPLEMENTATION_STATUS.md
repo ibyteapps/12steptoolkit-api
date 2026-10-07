@@ -4,7 +4,7 @@ Honest state of the Laravel layer as of **2026-10-07**. Written so that the
 difference between "built and tested", "deliberately stubbed" and "not started"
 is never a guess.
 
-**Tests: 95 passed (350 assertions). Pint clean.**
+**Tests: 103 passed (371 assertions). Pint clean.**
 
 ---
 
@@ -23,6 +23,31 @@ field is wrong with it.
 | `Services/Legacy/LegacyJwt.php` | HS256, the shipped secret, accepted for tokens already in the field. |
 | `Services/Legacy/LegacyEnvelope.php` | `{status, message, response}`, and the `strings()` helper for the `strval()` behaviour the clients parse. |
 | `Models/RequestNonce.php` | `claim()`. Replay protection the live server has in a file and never wired up. |
+
+### Token provenance — the placeholder-secret containment
+
+The live server's JWT secret is the library's template placeholder
+(`19/jwt_verify.php:11`), so anybody can mint a bearer token for any account id,
+and `bootstrap_secret.php` would then hand them that install's signing key. The
+owner's decision is to leave the live server alone, so this application is where
+it gets contained:
+
+* it **never issues a legacy-format token** — sign-in returns a Sanctum token,
+  which makes "legacy format" mean "did not come from here" with nothing to look
+  up. Safe because the shipped Android client treats the token as opaque, which
+  was traced rather than assumed (`LoginActivity.kt:184`, `TokenStore.kt:84`,
+  and no JWT decoding anywhere in 285 Kotlin files);
+* `VerifyLegacyJwt` records `server` or `legacy` on every request;
+* `bootstrap_secret.php` refuses to mint or rotate for a `legacy` token, so a
+  forged token can only read a device binding that already exists — and it would
+  have to guess a real install's device id to do that.
+
+Thirteen tests, with `LegacyJwt::issue()` playing the old server so the rule is
+tested against a token indistinguishable from a forged one. One line
+(`LEGACY_TOKENS_MAY_BOOTSTRAP`) relaxes it for the cutover window.
+
+Tokens are also capped per account and expire, where the old system had a
+296,000,000-second lifetime and no revocation list at all.
 
 ### The v19 endpoints
 

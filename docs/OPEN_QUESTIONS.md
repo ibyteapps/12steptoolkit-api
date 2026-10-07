@@ -152,6 +152,59 @@ Three things before you run it:
 These are not questions about what to build. They are things I found that you
 should know about, each with what I would do.
 
+### B0. The live JWT secret is the library's template placeholder
+
+`19/jwt_verify.php:11`
+
+```php
+const JWT_SECRET = 'CHANGE_ME_TO_A_…'; // move to env/config
+```
+
+`db.php:22` requires that file, so it is the auth path on every live endpoint.
+`require_valid_jwt()` validates bearer tokens with it; `issue_jwt()` signs with
+it. So anybody can sign `{"sub": <any account id>}` and hold a valid token for
+that account, and `bootstrap_secret.php` — token-only auth, because you cannot
+sign a request before you hold the key — will then hand over that install's HMAC
+signing key. From there every endpoint opens.
+
+That is an unauthenticated takeover of any account, live now. B1 below was only
+a convenience on top of it.
+
+**The owner's decision (2026-10-07): leave the live server alone and handle it
+properly in the new stack.** Rotating the secret there invalidates every token
+in every installed app, and the shipped client swallows 401s (AND-004), so sync
+would stop silently with no prompt to sign in again.
+
+**What this application does instead**, so that it does not inherit the hole:
+
+* **it never issues a legacy-format token.** `AuthController::signedIn` issues a
+  Sanctum token. That makes "legacy format" mean "did not come from here",
+  exactly, with nothing to look up. Safe because the shipped Android client
+  treats the token as opaque — traced, not assumed: `ui/LoginActivity.kt:184`
+  reads `map["access_token"]` as a string and `map["expires_at"]` separately,
+  `auth/TokenStore.kt:84` stores the pair, and nothing on the client decodes it.
+* **`VerifyLegacyJwt` records provenance** — `server` or `legacy` — on every
+  request.
+* **`bootstrap_secret.php` refuses to mint or rotate for a `legacy` token.** It
+  may only return a key for an `(account_id, device_id)` pair that already
+  exists.
+
+Which leaves a forger needing a real install's `device_id` — a value that only
+ever exists on that phone — before the endpoint tells them anything. Without a
+key they cannot sign, and every endpoint that touches step work needs a
+signature.
+
+The one real cost: somebody on Android 1.9.0 who clears their app data keeps
+their old token but loses their device binding, and is refused at bootstrap
+until they sign in again. That is a sign-in, not a loss — their writing is on
+the server and comes back with them. `LEGACY_TOKENS_MAY_BOOTSTRAP=true` restores
+the old behaviour in one line if the refusals turn out to be louder than
+expected.
+
+Thirteen tests in `tests/Feature/Legacy/InstallSecretTest.php` hold this,
+using `LegacyJwt::issue()` to play the part of the old server — a token
+indistinguishable from a real forged one.
+
 ### B1. `19/Ztest_jwt.php` mints a token for any account id, to anyone
 
 A file left in the live script directory that issues a 9.4-year JWT for any
@@ -183,20 +236,23 @@ keeping the overlap short.
 does not make the secret un-leaked, but it stops it being handed out to new
 people.
 
-### B3. `bootstrap_secret.php` returns the signing key to any bearer token
+### B3. `bootstrap_secret.php` returns the signing key to any bearer token — **narrowed**
 
 You cannot sign a request before you hold the key, so the endpoint that issues
-the key cannot itself be signed. The consequence is that the HMAC layer gives
-replay protection and device binding, not a second factor: whoever holds a
-token can get the key that goes with it.
+the key cannot itself be signed. On the live server the consequence is total:
+whoever holds a token — including a forged one, see B0 — can get the key that
+goes with it.
 
-Closing it needs a client release (the key would have to be derived at install
-time from something the server never sees, or delivered through an attested
-channel). The new Flutter client *could* do that. **Deciding to change it means
-the new app can no longer use the v19 bootstrap unchanged**, which is the one
-place where the "v19 is the main contract" decision would start to cost
-something. I have left it as the old behaviour and flagged it rather than making
-that call.
+In this application it is narrowed to almost nothing by the provenance rule in
+B0: only a token this server issued may register a device or rotate a key. What
+remains is that a token this server issued can obtain the key for its own
+install, which is unavoidable and is what the signature layer is for — replay
+protection and device binding, not a second factor.
+
+Closing even that would need the key derived at install time from something the
+server never sees, or delivered through an attested channel, which is a client
+release and a change to the v19 contract. Not worth it while the provenance rule
+holds.
 
 ### B4. `mail_forgotpassword.php` emails the user their plaintext password
 
