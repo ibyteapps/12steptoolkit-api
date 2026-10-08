@@ -125,15 +125,18 @@ class StoreSubscription extends Model
     /**
      * The `grants` values that make the **buyer** a subscriber.
      *
-     * Deliberately a list of what does, not of what does not. Two of the three
-     * values in `config/billing.php` do not:
+     * Deliberately a list of what does, not of what does not. Three of the four
+     * values `config/billing.php` may carry do not:
      *
      *  * `sponsee_gift` — a consumable a sponsor buys *for somebody else*. It
      *    becomes a slot; it never makes the buyer premium.
-     *  * `unresolved` — a product whose entitlement is not yet known. The three
-     *    2024 à-la-carte unlocks (`steps8and9`, `steps10and11`,
-     *    `otherfeatures`) are in this state pending one fact from the
-     *    RevenueCat dashboard; `docs/OPEN_QUESTIONS.md` C5a.
+     *  * `none` — **decided** to grant nothing. The three à-la-carte unlocks
+     *    (`steps8and9`, `steps10and11`, `otherfeatures`), sold roughly a decade
+     *    ago, retired since, and never attached to an entitlement in
+     *    RevenueCat or to `accounts.subscribed` by `19/add_order.php`. The
+     *    owner's call, 2026-10-08; `docs/ENTITLEMENT_RULES.md` R2.
+     *  * `unresolved` — **not decided yet**. Nothing is in this state today,
+     *    and the value is kept because the distinction below depends on it.
      */
     public const GRANTS_SUBSCRIBER_ACCESS = ['subscription'];
 
@@ -142,12 +145,13 @@ class StoreSubscription extends Model
      *
      * This exists because the test it replaces was `! isUnmapped()`, which asks
      * whether the product id appears in the config at all — and "appears in the
-     * config" is not "grants access". Adding the three unresolved 2024 products
-     * to that list, so that the console could name them, would have made them
-     * mapped, and a mapped lifetime purchase with no expiry granted premium.
-     * Encoding "we have not decided yet" as *absence from a list* makes it
-     * indistinguishable from "we decided it grants nothing", and the two need
-     * different answers from a resolver whose whole rule is to err generously.
+     * config" is not "grants access". Adding the three retired à-la-carte
+     * products to that list, so that the console could name them, would have
+     * made them mapped, and a mapped lifetime purchase with no expiry granted
+     * premium. Encoding "we have not decided yet" as *absence from a list*
+     * makes it indistinguishable from "we decided it grants nothing", and the
+     * two need different answers from a resolver whose whole rule is to err
+     * generously.
      */
     public function grantsSubscriberAccess(): bool
     {

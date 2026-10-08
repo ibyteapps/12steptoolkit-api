@@ -2,6 +2,8 @@
 
 namespace App\Console\Commands;
 
+use App\Console\Commands\Concerns\ReportsChecks;
+use App\Exceptions\CheckCaution;
 use App\Models\Account;
 use App\Models\InstallSecret;
 use Illuminate\Console\Command;
@@ -9,7 +11,6 @@ use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
-use Throwable;
 
 /**
  * `php artisan app:check` — is this deployment actually able to do its job?
@@ -27,61 +28,30 @@ use Throwable;
  */
 class CheckCommand extends Command
 {
+    use ReportsChecks;
+
     protected $signature = 'app:check {--legacy : Also check the adopted tables, column by column}';
 
     protected $description = 'Check that this deployment is wired up: database, adopted schema, cache, queue, scheduler, storage, secrets';
-
-    private int $failures = 0;
-
-    private int $warnings = 0;
 
     public function handle(): int
     {
         $this->line('');
 
-        $this->section('Database');
-        $this->database();
-
-        $this->section('The adopted tables');
-        $this->adoptedTables();
-
-        $this->section('Character sets');
-        $this->charsets();
+        $this->section('Database', $this->database(...));
+        $this->section('The adopted tables', $this->adoptedTables(...));
+        $this->section('Character sets', $this->charsets(...));
 
         if ($this->option('legacy')) {
-            $this->section('The adopted columns');
-            $this->adoptedColumns();
+            $this->section('The adopted columns', $this->adoptedColumns(...));
         }
 
-        $this->section('This application\'s own tables');
-        $this->ownTables();
+        $this->section('This application\'s own tables', $this->ownTables(...));
+        $this->section('Cache, queue and scheduler', $this->runtime(...));
+        $this->section('Storage', $this->storage(...));
+        $this->section('Secrets and switches', $this->secrets(...));
 
-        $this->section('Cache, queue and scheduler');
-        $this->runtime();
-
-        $this->section('Storage');
-        $this->storage();
-
-        $this->section('Secrets and switches');
-        $this->secrets();
-
-        $this->line('');
-
-        if ($this->failures > 0) {
-            $this->components->error($this->failures.' '.str('check')->plural($this->failures).' failed'.($this->warnings > 0 ? ", {$this->warnings} to look at" : ''));
-
-            return self::FAILURE;
-        }
-
-        if ($this->warnings > 0) {
-            $this->components->warn('Everything essential is working. '.$this->warnings.' '.str('thing')->plural($this->warnings).' to look at.');
-
-            return self::SUCCESS;
-        }
-
-        $this->components->info('Everything checked out.');
-
-        return self::SUCCESS;
+        return $this->report();
     }
 
     // ------------------------------------------------------------- the checks
@@ -271,19 +241,19 @@ class CheckCommand extends Command
 
     private function ownTables(): void
     {
-        $missing = [];
+        $this->check('migrated', function (): string {
+            $missing = [];
 
-        foreach ([
-            'personal_access_tokens', 'installs', 'login_codes', 'sign_ins', 'request_nonces',
-            'account_security', 'console_users', 'console_audit', 'support_tickets', 'support_messages',
-            'entitlements', 'store_subscriptions', 'store_orders', 'settings', 'sessions', 'jobs',
-        ] as $table) {
-            if (! Schema::hasTable($table)) {
-                $missing[] = $table;
+            foreach ([
+                'personal_access_tokens', 'installs', 'login_codes', 'sign_ins', 'request_nonces',
+                'account_security', 'console_users', 'console_audit', 'support_tickets', 'support_messages',
+                'entitlements', 'store_subscriptions', 'store_orders', 'settings', 'sessions', 'jobs',
+            ] as $table) {
+                if (! Schema::hasTable($table)) {
+                    $missing[] = $table;
+                }
             }
-        }
 
-        $this->check('migrated', function () use ($missing): string {
             if ($missing !== []) {
                 throw new \RuntimeException('run `php artisan migrate` — missing '.implode(', ', $missing));
             }
@@ -300,9 +270,7 @@ class CheckCommand extends Command
             }
 
             if ($usable === 0) {
-                $this->warnings++;
-
-                return "{$total}, none with a password set yet";
+                throw new CheckCaution("{$total}, none with a password set yet");
             }
 
             return "{$usable} of {$total} can sign in";
@@ -328,16 +296,14 @@ class CheckCommand extends Command
             $driver = (string) config('queue.default');
 
             if ($driver === 'sync') {
-                $this->warnings++;
-
-                return 'sync — jobs run inside the request. Fine for now, not for webhooks';
+                throw new CheckCaution('sync — jobs run inside the request. Fine for now, not for webhooks');
             }
 
             $pending = Schema::hasTable('jobs') ? DB::table('jobs')->count() : 0;
             $failed = Schema::hasTable('failed_jobs') ? DB::table('failed_jobs')->count() : 0;
 
             if ($failed > 0) {
-                $this->warnings++;
+                throw new CheckCaution("{$driver} — {$pending} waiting, {$failed} failed");
             }
 
             return "{$driver} — {$pending} waiting, {$failed} failed";
@@ -363,9 +329,7 @@ class CheckCommand extends Command
             $at = Carbon::parse($beat);
 
             if ($at->lt(now()->subMinutes(5))) {
-                $this->warnings++;
-
-                return 'last ran '.$at->diffForHumans().' — stale';
+                throw new CheckCaution('last ran '.$at->diffForHumans().' — stale');
             }
 
             return 'ran '.$at->diffForHumans();
@@ -394,9 +358,7 @@ class CheckCommand extends Command
             $path = (string) config('toolkit.icons.path');
 
             if (! is_dir($path)) {
-                $this->warnings++;
-
-                return "{$path} does not exist — profile pictures will not load";
+                throw new CheckCaution("{$path} does not exist — profile pictures will not load");
             }
 
             if (str_starts_with(realpath($path) ?: '', realpath(public_path()) ?: '|')) {
@@ -439,16 +401,17 @@ class CheckCommand extends Command
 
         $this->check('legacy v8', function (): string {
             if (! config('legacy.apple.enabled')) {
-                return 'switched off (the Apple layer is not built yet — that is correct)';
+                return 'switched off — the v8 endpoints are built but answer nothing here';
             }
 
             if (config('legacy.apple.server_secret') === '') {
                 throw new \RuntimeException('enabled with an empty secret — every Apple request will be refused');
             }
 
-            $this->warnings++;
-
-            return 'ON — and the Apple endpoints answer 503. See IMPLEMENTATION_STATUS.md';
+            throw new CheckCaution(
+                'ON — `getlist` and `deleterecord` answer; the remaining Apple scripts still 503. '
+                .'See IMPLEMENTATION_STATUS.md',
+            );
         });
 
         $this->check('plaintext password column', fn (): string => (string) config('legacy.plaintext_password')
@@ -457,26 +420,5 @@ class CheckCommand extends Command
         $this->check('sealing', fn (): string => config('legacy.seal_on_v2_login')
             ? 'on — the legacy exposure shrinks with every 2.0 sign-in'
             : 'OFF — accounts keep their weaker door open after upgrading');
-    }
-
-    // ------------------------------------------------------------- plumbing
-
-    private function section(string $title): void
-    {
-        $this->line('  <options=bold>'.$title.'</>');
-    }
-
-    /** @param  callable():string  $probe */
-    private function check(string $label, callable $probe): void
-    {
-        try {
-            $detail = $probe();
-            $this->line(sprintf('  <fg=green>✓</> %s <fg=gray>%s</>', $label, $detail));
-        } catch (Throwable $e) {
-            $this->failures++;
-            $this->line(sprintf('  <fg=red>✗</> %s <fg=red>%s</>', $label, $e->getMessage()));
-        }
-
-        $this->newLine(0);
     }
 }

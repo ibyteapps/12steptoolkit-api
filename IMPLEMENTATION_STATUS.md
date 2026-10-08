@@ -367,8 +367,17 @@ is a known shape in the old scripts:
 
 ### 3.2 Billing — the providers
 
-The resolver and the models are built and tested (§1). What is not wired is
-everything that talks to a store:
+The resolver and the models are built and tested (§1), and so now is everything
+needed to *reach* a store: `Services/Billing/Apple/AppleKey` (which refuses a
+key of the wrong curve before anything signs with it),
+`Apple/AppStoreServerApi`, `Apple/AppStoreConnectApi`,
+`Google/ServiceAccountKey` and `Google/PlayDeveloperApi` — each thin, each
+read-only, none of them retrying or logging a key, a token or a transaction id.
+`php artisan billing:check` exercises all five against the live APIs and is the
+command to run when the credentials are in doubt; `docs/STORE_SETUP.md` is the
+matching checklist.
+
+What is not wired is everything that *acts* on what a store says:
 
 * Apple **App Store Server Notifications V2** → `/api/v2/webhooks/apple`,
   JWS verified against the Apple Root CA - G3 fingerprint already in
@@ -385,10 +394,15 @@ everything that talks to a store:
 `EntitlementService` is already the thing all of them will call, so each is a
 verifier that writes a `store_subscriptions` row and then one `refresh()`.
 
-The Google product ids are a guess and marked as one (§C1). Until they are
-confirmed, an unlisted product is recorded and grants nothing from this server,
-and every current subscriber stays premium through the RevenueCat bridge — so
-the unknown costs nobody access.
+**Both catalogues are now reconciled** against the RevenueCat product list
+(§C1 closed, 2026-10-08): thirteen Apple products with their subscription group
+and level, seventeen Google products with their base plans, and the three
+retired à-la-carte unlocks mapped to `grants => none` by the owner's decision
+(`docs/ENTITLEMENT_RULES.md` R2). `billing:check` diffs each store's live
+catalogue against that config, which is the only thing that notices a product
+being sold that this server does not honour. An id neither knows is still
+recorded and still grants nothing from here, while the person keeps their
+access through the RevenueCat bridge — so the unknown costs nobody access.
 
 ### 3.3 The console, the rest of it
 
@@ -414,9 +428,16 @@ everything in that list: counts and dates and sync state, never content.
 
 ### 3.4 Artisan commands still to write
 
-`console:user` and `app:check` are built (§1). Two remain, and both depend on
-§3.2: `billing:prices` (prints the real store catalogue, which is how §C1 gets
-answered) and `revenuecat:reconcile`.
+`console:user`, `app:check` and `billing:check` are built (§1). Three remain:
+
+* `revenuecat:import` — the one-time export, which is the only place holding
+  `original_transaction_id` and Google purchase tokens for the current
+  subscriber base. On the critical path and it expires with the account
+  (`docs/ENTITLEMENT_RULES.md` R3).
+* `revenuecat:reconcile` — for what the webhook misses during the overlap.
+* `billing:prices` — the live prices for the console's plans page. Narrower than
+  it was: `billing:check` already proves the catalogue calls work and reports
+  what each store holds, so this is the formatting rather than the plumbing.
 
 ### 3.5 The website layer
 

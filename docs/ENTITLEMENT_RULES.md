@@ -27,10 +27,30 @@ iOS). Every existing subscriber's premium runs through it **today**. So:
 * its **webhook stays wired as an ingest**, because a purchase made in the *old*
   app after cutover happens through RevenueCat and this server would otherwise
   never hear about it;
-* and nothing in this server **reads** RevenueCat to decide access any more.
+* and this server stops **granting** from RevenueCat — but **not yet**.
+
+That last point was wrong when first written here, and the correction matters
+more than the original line did. "Nothing reads RevenueCat to decide access any
+more" is the *end* state. Shipping it today would un-subscribe every current
+subscriber, because their entitlement lives in RevenueCat and nowhere else
+until the export is imported and verified against the stores. That is exactly
+the failure `EntitlementService`'s **no source may take away access** rule
+exists to prevent — committed by the deployment instead of by the resolver,
+which is the version no test catches.
+
+Two flags, and the order is the whole point:
+
+| Flag | Means | Goes false when |
+|---|---|---|
+| `REVENUECAT_GRANTS_ACCESS` | a RevenueCat answer may make somebody premium | the export is imported **and** the console's subscriber count has been checked against it |
+| `REVENUECAT_ENABLED` | this server listens to RevenueCat at all | 1.9.0 and 1.6.6 are retired — until then a purchase made in the old app arrives only by that webhook |
 
 Turning the account off before the old apps are gone would silently un-subscribe
 everybody who has not upgraded.
+
+`php artisan billing:check` prints which combination a server is currently in,
+and flags the one that cannot be right — granting on while listening is off,
+which grants nothing at all.
 
 ---
 

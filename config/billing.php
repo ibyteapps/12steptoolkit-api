@@ -18,7 +18,8 @@
 | It needs two things switched on in the stores, and neither can be done from
 | here: App Store Server Notifications V2 pointed at /api/v2/webhooks/apple,
 | and Google Real-time Developer Notifications pointed at a Pub/Sub topic that
-| pushes to /api/v2/webhooks/google. `GO_LIVE.md` has the steps.
+| pushes to /api/v2/webhooks/google. `docs/STORE_SETUP.md` has the steps,
+| and `php artisan billing:check` says which of them is outstanding.
 |
 | Secrets never go in this file or in git: the In-App Purchase key (.p8) and
 | the Play service account JSON live outside the web root and only their PATHS
@@ -92,13 +93,18 @@ return [
          | `…annual`, which is not sold any more; anyone still on it keeps it.
          | A person can hold one subscription from *each* group at once, which
          | R8 handles by taking the most generous.
+         |
+         | Hence `group` beside `level`: a level is only meaningful *within* a
+         | group, so `annual1` and `annual` are both level 1 and that is not a
+         | clash. `billing:check` enforces uniqueness per group, which is the
+         | only form of the rule that is true.
          */
         'products' => [
 
             // ── Group "Unlock All Features", by level ────────────────────
-            'com.12stepapp.recoverybox.annual1' => ['cycle' => 'annual', 'grants' => 'subscription', 'level' => 1, 'label' => 'Annual'],
-            'com.12stepapp.recoverybox.quarterly1' => ['cycle' => 'quarterly', 'grants' => 'subscription', 'level' => 2, 'label' => 'Quarterly'],
-            'com.12stepapp.recoverybox.annual1999' => ['cycle' => 'annual', 'grants' => 'subscription', 'level' => 3, 'label' => 'Annual'],
+            'com.12stepapp.recoverybox.annual1' => ['cycle' => 'annual', 'grants' => 'subscription', 'group' => 'all_features', 'level' => 1, 'label' => 'Annual'],
+            'com.12stepapp.recoverybox.quarterly1' => ['cycle' => 'quarterly', 'grants' => 'subscription', 'group' => 'all_features', 'level' => 2, 'label' => 'Quarterly'],
+            'com.12stepapp.recoverybox.annual1999' => ['cycle' => 'annual', 'grants' => 'subscription', 'group' => 'all_features', 'level' => 3, 'label' => 'Annual'],
 
             /*
              | ⚠ THE PRODUCT ID IS LITERALLY `Quarterly`, AND THAT IS NOT A
@@ -119,14 +125,14 @@ return [
              | `promotional` so it can be counted separately; `hidden` so it
              | never appears in a list of plans anybody can choose from.
              */
-            'Quarterly' => ['cycle' => 'quarterly', 'grants' => 'subscription', 'level' => 4, 'label' => 'Quarterly, flash sale', 'promotional' => true, 'hidden' => true],
+            'Quarterly' => ['cycle' => 'quarterly', 'grants' => 'subscription', 'group' => 'all_features', 'level' => 4, 'label' => 'Quarterly, flash sale', 'promotional' => true, 'hidden' => true],
 
-            'com.12stepapp.recoverybox.quarterly999' => ['cycle' => 'quarterly', 'grants' => 'subscription', 'level' => 5, 'label' => 'Quarterly'],
-            'com.12stepapp.recoverybox.weekly1' => ['cycle' => 'weekly', 'grants' => 'subscription', 'level' => 6, 'label' => 'Weekly'],
+            'com.12stepapp.recoverybox.quarterly999' => ['cycle' => 'quarterly', 'grants' => 'subscription', 'group' => 'all_features', 'level' => 5, 'label' => 'Quarterly'],
+            'com.12stepapp.recoverybox.weekly1' => ['cycle' => 'weekly', 'grants' => 'subscription', 'group' => 'all_features', 'level' => 6, 'label' => 'Weekly'],
 
             // ── Group "Unlock Premium" — the original, no longer sold ────
             // Carries a one-week free introductory offer (`.storekit:187-192`).
-            'com.12stepapp.recoverybox.annual' => ['cycle' => 'annual', 'grants' => 'subscription', 'level' => 1, 'label' => 'Annual (original)'],
+            'com.12stepapp.recoverybox.annual' => ['cycle' => 'annual', 'grants' => 'subscription', 'group' => 'premium', 'level' => 1, 'label' => 'Annual (original)'],
 
             /*
              | ⚠ LIFETIME, SOLD AS A **CONSUMABLE**, WHICH IS THE DEFECT THIS
@@ -234,9 +240,13 @@ return [
              | one ever does arrive the person gets access rather than nothing.
              | Being generous to a purchase that should not exist costs less
              | than refusing one that does.
+             |
+             | `base_plan => null` is explicit: there deliberately is not one,
+             | as against nobody having written it down. `billing:check` tells
+             | those two apart.
              */
-            'annual_3' => ['cycle' => 'annual', 'grants' => 'subscription', 'label' => 'Annual, sponsor bundle (unsold)'],
-            'quarterly_3' => ['cycle' => 'quarterly', 'grants' => 'subscription', 'label' => 'Quarterly, sponsor bundle (unsold)'],
+            'annual_3' => ['cycle' => 'annual', 'grants' => 'subscription', 'base_plan' => null, 'label' => 'Annual, sponsor bundle (unsold)'],
+            'quarterly_3' => ['cycle' => 'quarterly', 'grants' => 'subscription', 'base_plan' => null, 'label' => 'Quarterly, sponsor bundle (unsold)'],
 
             // ── One-time: the lifetime unlock, at four price points ───────
             'profeatures' => ['cycle' => 'lifetime', 'grants' => 'subscription', 'label' => 'Lifetime'],
@@ -299,6 +309,28 @@ return [
     */
     'revenuecat' => [
         'enabled' => filter_var(env('REVENUECAT_ENABLED', true), FILTER_VALIDATE_BOOL),
+
+        /*
+         | **Whether RevenueCat may still GRANT access**, which is a different
+         | question from whether we still listen to it, and the two have to be
+         | separable or the cutover has no safe middle.
+         |
+         | The owner's decision is to drop RevenueCat (ENTITLEMENT_RULES §0).
+         | But every current subscriber's entitlement lives there and nowhere
+         | else until the export is imported and verified against the stores.
+         | Flipping both halves off at once would silently un-subscribe
+         | everybody who has not yet been imported — which is precisely the
+         | failure `EntitlementService`'s "no source may take away access"
+         | rule exists to prevent, committed by the deployment rather than by
+         | the resolver.
+         |
+         | So the sequence is: import, verify the numbers in the console,
+         | *then* set this false. `enabled` stays true for longer still, since
+         | a purchase made in the OLD app after cutover arrives only through
+         | the RevenueCat webhook and this server would otherwise never hear
+         | about it.
+         */
+        'grants_access' => filter_var(env('REVENUECAT_GRANTS_ACCESS', true), FILTER_VALIDATE_BOOL),
         'api_key' => env('REVENUECAT_SECRET_KEY'),
         'webhook_auth' => env('REVENUECAT_WEBHOOK_AUTH'),
         'entitlement_id' => env('REVENUECAT_ENTITLEMENT_ID', 'subscribed'),

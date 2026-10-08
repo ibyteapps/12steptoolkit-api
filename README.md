@@ -131,13 +131,15 @@ What the 88 cover:
   and none of those strings may appear on any of them. A new panel, a debug
   dump, an exception or a `select *` that leaks one fails this test by name.
 
-## Two commands worth knowing about
+## Three commands worth knowing about
 
 ```bash
 cd /Users/tushar/Work/Websites/12StepToolkit/api
 php artisan console:user you@example.com   # the only way a staff account exists
 php artisan app:check                      # is THIS server wired up?
 php artisan app:check --legacy             # ...and is the database the shape we think?
+php artisan billing:check                  # can it actually reach Apple and Google?
+php artisan billing:check --offline        # ...and does the catalogue hang together?
 ```
 
 `console:user` prints a single-use set-password link; there is no registration
@@ -150,6 +152,16 @@ blocker — see `docs/OPEN_QUESTIONS.md` A4), the application's own tables, cach
 queue, the scheduler heartbeat, storage permissions, and every legacy switch with
 what it means. Exit code 1 on any failure, so it can be the body of a monitor.
 
+`billing:check` is for the afternoon the store credentials are being set up, when
+four systems each blame the others. It makes one real read-only call to each store
+API and names which half works and why the other does not — telling apart a key
+Google refused, an API not enabled in the key's Cloud project, and a service
+account not yet granted in the Play Console, which are fixed in three different
+places. It also diffs each store's live catalogue against `config/billing.php`,
+which is the only thing that notices a product being sold that this server does
+not honour. Needs no database, writes nothing anywhere, and never prints a key or
+a token. `docs/STORE_SETUP.md` is the matching checklist.
+
 ## The documents
 
 | File | What it answers |
@@ -157,6 +169,8 @@ what it means. Exit code 1 on any failure, so it can be the body of a monitor.
 | `ARCHITECTURE.md` | why the old contract is the main one, how the three applications are kept apart, what each legacy hole was and what replaced it |
 | `IMPLEMENTATION_STATUS.md` | what is built, what is stubbed, what is not started |
 | `docs/CUTOVER.md` | the order of the switch-over, and how to switch back |
+| `docs/STORE_SETUP.md` | what to click in App Store Connect, Cloud Console and the Play Console, and how to read `billing:check` |
+| `docs/ENTITLEMENT_RULES.md` | who is premium and why — our own rules, replacing RevenueCat's |
 | `docs/OPEN_QUESTIONS.md` | the things that cannot be answered by reading code, each with the one command or screen that answers it — section A is now closed by the schema dump, and A6 is a live bug it turned up |
 | `docs/reference/legacy-schema.sql` | the real schema of `data_12steptoolkit`, structure only. The authoritative reference for every column type in this application |
 
