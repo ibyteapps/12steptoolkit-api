@@ -138,11 +138,16 @@ class EntitlementService
             ->where('account_id', $accountId)
             ->get()
             ->filter(fn (StoreSubscription $s) => $s->grantsAccess())
-            // A purchase of a product this server does not recognise is recorded
-            // and grants nothing *from this server*. The person keeps their
-            // access through RevenueCat meanwhile, so nobody is locked out by
-            // an unconfirmed product id. docs/OPEN_QUESTIONS.md C1.
-            ->reject(fn (StoreSubscription $s) => $s->isUnmapped());
+            // A purchase this server cannot map to subscriber access grants
+            // nothing *from this server*: an id it has never seen, a sponsee
+            // gift (which belongs to somebody else), or a product whose
+            // entitlement is still unresolved. The person keeps their access
+            // through RevenueCat meanwhile, so nobody is locked out by a
+            // product id nobody has confirmed yet.
+            //
+            // `grantsSubscriberAccess`, not `! isUnmapped`: see that method for
+            // why the difference matters.
+            ->filter(fn (StoreSubscription $s) => $s->grantsSubscriberAccess());
 
         if ($subscriptions->isEmpty()) {
             return null;

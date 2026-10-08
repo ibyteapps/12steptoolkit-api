@@ -310,31 +310,30 @@ enough that someone may still rely on the flow.
 
 ## C. Product decisions I could not make for you
 
-### C1. The Google product ids are not confirmed
+### C1. The Google product ids — **answered 2026-10-08**
 
-`config/billing.php`'s `google.products` is a guess and is marked as one.
+The live Play catalogue, as supplied: **8 subscriptions** (`weekly`, `monthly`,
+`quarterly`, `quarterly_2025`, `annual`, `annual_1999`, `quarterly_3`,
+`annual_3`) and **9 one-time products** (`profeatures`, `profeatures1499`,
+`profeatures2999`, `profeatures_discounted`, `sponsee_1_annual`,
+`sponsee_1_quarterly`, `steps8and9`, `steps10and11`, `otherfeatures`). All
+seventeen are in `config/billing.php`.
 
-The Android app buys through **RevenueCat packages** — `$rc_weekly`,
-`$rc_three_month`, `$rc_annual`, `$rc_lifetime`, plus `sponsee_quarterly` and
-`sponsee_annual` — and a package identifier is **not** a Play product id. The
-mapping from one to the other lives in the RevenueCat dashboard, not in either
-binary, so it cannot be read out of the code at all.
+**This mattered less than it looked, and in a different way than expected.**
+Neither shipped client decides anything from a product id. Android asks
+RevenueCat for one entitlement, `subscribed`, and reads `isActive`
+(`RevCatManager.kt:58, 95`); it buys by RevenueCat *package* identifier, records
+the product id only as a label, and infers "lifetime" from a **null or zero
+expiry** rather than from the id (`:499`). So the ids were never blocking the
+entitlement resolver.
 
-The Apple side *is* confirmed: the ids come from the project's own
-`12 Step Toolkit.storekit`, which is the local mirror of App Store Connect. Two
-subscription groups exist there, which is history rather than design — group
-20509670 "Unlock Premium" holds the original `…annual`, group 20641515 "Unlock
-All Features" holds the current `…annual1` and `…quarterly1`. Anyone still on
-the old group keeps their subscription; it is simply not sold any more. Both
-grant.
+What they *were* blocking is narrower and real: a Google RTDN arrives with a
+product id and nothing else, so **telling a sponsee gift from a self-purchase**
+is impossible without this table. The client knows because it chose the
+`sponsee_annual` package; the server only sees `sponsee_1_annual`.
 
-**What this application does meanwhile.** A purchase of an unlisted product is
-**recorded and grants nothing from this server**, and the console shows it as
-unmapped. Nobody loses access, because every current subscriber is granted
-through the RevenueCat read-only bridge.
-
-**What answers it.** Play Console → Monetize → Subscriptions, or RevenueCat →
-Products. Paste the list and I will fill it in.
+Two follow-ups fell out of the list rather than being resolved by it: **C5a**
+and **C6** below.
 
 ### C2. `shared` versus `reviewed` — mostly answered, one bit left
 
@@ -418,6 +417,51 @@ a purchase that granted nothing from this server. Worth a look after the first
 day of real traffic.
 
 ---
+
+### C5a. Do the three 2024 à-la-carte unlocks grant anything today?
+
+**The one question in the catalogue I cannot answer by reading code.**
+
+`steps8and9`, `steps10and11` and `otherfeatures` (all Jan 2024) predate the
+single `subscribed` entitlement. Nothing in either shipped client reads a
+product id, so whether somebody who bought one of these has anything today
+depends entirely on **whether RevenueCat attaches those three products to the
+`subscribed` entitlement**.
+
+* **If it does** — they already have full premium, this server needs to do
+  nothing, and the config rows exist only so the console can name them.
+* **If it does not** — those people paid and have had nothing since. That is a
+  live bug in the current app, not a decision about the rebuild, and it is worth
+  knowing how many accounts it is.
+
+**What to look at:** RevenueCat dashboard → Products, and check whether those
+three are attached to the `subscribed` entitlement. One screen.
+
+**Meanwhile:** `grants => 'unresolved'`, which grants nothing from this server.
+Nobody loses access, because every current entitlement comes through the
+RevenueCat bridge and the bridge does not consult that table. Guessing generous
+here would hand lifetime premium to a cohort nobody has counted; guessing mean
+would take away something somebody paid for. Neither is a guess worth making for
+a fact that is one screen away.
+
+### C6. Do `annual_3` / `quarterly_3` carry three sponsee slots?
+
+"Sponsor & 3 Sponsees", both Jan 2024, neither with a live offer — so they look
+superseded by the one-slot consumables, which is what the client's gifting flow
+actually buys.
+
+They grant the **buyer** a subscription; that much is certain and is what the
+config does. What is not certain is whether they also entitle three sponsees,
+and if so by what mechanism — RevenueCat cannot express it, so it would have to
+be server logic reading the sku.
+
+**Meanwhile:** no slots are created. This is the one deliberately ungenerous
+call in a resolver whose rule is to err generously, and the asymmetry is why —
+granting a subscription wrongly affects one person who paid for something;
+creating three slots wrongly hands free premium to three accounts that did not.
+
+**What settles it:** whether either product has ever sold. If Play shows no
+purchases, the question closes with "unsold, ignore".
 
 ## D. Changes to the live database I recommend but will not make
 

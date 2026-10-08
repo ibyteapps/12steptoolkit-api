@@ -111,14 +111,50 @@ class StoreSubscription extends Model
     }
 
     /**
-     * A purchase of a product this server does not know about is recorded and
-     * grants nothing *from this server* — the console shows it, and the person
-     * keeps their access through the RevenueCat bridge meanwhile. The Google
-     * product ids are not confirmed; see docs/OPEN_QUESTIONS.md C1.
+     * A purchase of a product this server does not know about at all.
+     *
+     * The console's question, not the resolver's: "have we ever seen this id?"
+     * Recorded, shown, and granting nothing from this server, while the person
+     * keeps their access through the RevenueCat bridge.
      */
     public function isUnmapped(): bool
     {
         return $this->mapping() === null;
+    }
+
+    /**
+     * The `grants` values that make the **buyer** a subscriber.
+     *
+     * Deliberately a list of what does, not of what does not. Two of the three
+     * values in `config/billing.php` do not:
+     *
+     *  * `sponsee_gift` — a consumable a sponsor buys *for somebody else*. It
+     *    becomes a slot; it never makes the buyer premium.
+     *  * `unresolved` — a product whose entitlement is not yet known. The three
+     *    2024 à-la-carte unlocks (`steps8and9`, `steps10and11`,
+     *    `otherfeatures`) are in this state pending one fact from the
+     *    RevenueCat dashboard; `docs/OPEN_QUESTIONS.md` C5a.
+     */
+    public const GRANTS_SUBSCRIBER_ACCESS = ['subscription'];
+
+    /**
+     * Does this row make its owner a subscriber *according to this server*?
+     *
+     * This exists because the test it replaces was `! isUnmapped()`, which asks
+     * whether the product id appears in the config at all — and "appears in the
+     * config" is not "grants access". Adding the three unresolved 2024 products
+     * to that list, so that the console could name them, would have made them
+     * mapped, and a mapped lifetime purchase with no expiry granted premium.
+     * Encoding "we have not decided yet" as *absence from a list* makes it
+     * indistinguishable from "we decided it grants nothing", and the two need
+     * different answers from a resolver whose whole rule is to err generously.
+     */
+    public function grantsSubscriberAccess(): bool
+    {
+        $grants = $this->mapping()['grants'] ?? null;
+
+        return $grants !== null
+            && in_array($grants, self::GRANTS_SUBSCRIBER_ACCESS, true);
     }
 
     public function scopeGrantingAccess(Builder $query): Builder
