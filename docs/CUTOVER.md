@@ -60,85 +60,68 @@ known *before* the switch, not discovered during it.
 
 ## Step 2 — deploy alongside, answering nothing
 
-Put the application on the server at its own path, with its own vhost or
-subdomain, and leave the old scripts exactly where they are and still serving.
-Nothing points at the new application yet.
+Put the application in **`WEBSITES/12steptoolkit.com/api`**, a sibling of the
+website's document root, and have nginx route three prefixes to it —
+`/console`, `/api/v2` and `/up`. Everything else on the domain stays exactly
+where it is and still serving. Nothing in the field points at the new
+application yet.
 
-Build the archive locally:
+**The full step by step is `docs/DEPLOYMENT.md`**, and the nginx blocks to
+paste are `docs/nginx/12steptoolkit.com.conf`: the zip through File Manager,
+the git checkout, the deploy key, `.env`, `migrate`, and installing
+`app_update_toolkit`. It is a long document because it is a first install;
+afterwards the whole of this step is one command.
 
-```bash
-cd /Users/tushar/Work/Websites/12StepToolkit/api
-composer install --no-dev --optimize-autoloader
-```
+The three prefixes are **404s on this domain today**, which is the safety
+argument for the whole step: if any of it is wrong they stay 404s.
 
-```bash
-cd /Users/tushar/Work/Websites/12StepToolkit
-zip -r api-deploy.zip api -x "api/.env" -x "api/.git/*" -x "api/storage/logs/*" -x "api/tests/*" -x "api/node_modules/*"
-```
+Three things this step must not do, and the reason each one matters:
 
-Upload `api-deploy.zip` through **Plesk → File Manager** into the vhost
-directory and extract it there. Then, over SSH:
-
-```bash
-cd /var/www/vhosts/ibyteserver.com/WEBSITES/12steptoolkit.com/api
-```
-
-```bash
-chmod -R 775 storage bootstrap/cache
-```
-
-```bash
-cp .env.example .env && php artisan key:generate
-```
-
-Fill in `.env` — `DB_*` pointing at `data_12steptoolkit`, `LEGACY_JWT_SECRET`
-from `19/config.php`, `LEGACY_SERVER_SECRET` from the v8 config — and then:
-
-```bash
-chmod 600 .env
-```
-
-```bash
-php artisan migrate --force
-```
-
-That migration creates only this application's own tables. It names no adopted
-table and cannot damage one.
-
-```bash
-php artisan config:cache && php artisan route:cache
-```
-
-Point the vhost's document root at `api/public`, not `api`.
+* **It must not change the document root of `12steptoolkit.com`.** That root
+  serves the Next.js export: **205 URLs in `sitemap.xml`**, 180 of them the
+  A.A. literature, plus `app-ads.txt` (which AdMob fetches) and the
+  `/app/reset/*` landing pages that links in already-sent emails point at.
+  This application serves one route at `/` today, so moving that root now would
+  404 all of it — and it does not need to, because the graft reaches the three
+  prefixes without it. `docs/WEBSITE_TAKEOVER.md` is the measured list of what
+  has to be true before that root ever moves, and it is separate work.
+* **It must not touch the legacy script hosts.**
+  `scripts.12steptoolkit.com/…/19/*` and `apple.12stepapp.com/8/*` keep
+  answering the shipped apps until steps 4 and 5 move them, one at a time.
+* **It must keep both legacy flags off** — `LEGACY_V19_ENABLED=false`,
+  `LEGACY_V8_ENABLED=false`. The routes exist and stay shut, so nothing in the
+  field can reach this application even by accident.
 
 ### Prove it before anything depends on it
 
+`app_update_toolkit --check` does most of this for you — it reports what would
+be pulled, whether migrations are pending, `app:check`, and a smoke test of
+`/up`, `/`, `/api/v2/health`, `/console` and a 404. By hand:
+
 ```bash
-cd /var/www/vhosts/ibyteserver.com/WEBSITES/12steptoolkit.com/api
+cd /var/www/vhosts/ibyteserver.com/WEBSITES/12steptoolkit-api
 ```
 
 ```bash
-curl -s https://<new-host>/api/v2/health
-curl -s https://<new-host>/up
+curl -s https://12steptoolkit.com/api/v2/health
+curl -s https://12steptoolkit.com/up
 ```
 
-Then, with the legacy flags still **off** (`LEGACY_V19_ENABLED=false`,
-`LEGACY_V8_ENABLED=false`), check that `get_app_settings.php` answers under
-`data` and that a signed `get_counts.php` is refused. That is the shape of the
-old contract proven without a single real client touching it.
+Then, with the legacy flags still off, check that `get_app_settings.php`
+answers under `data` and that a signed `get_counts.php` is refused. That is the
+shape of the old contract proven without a single real client touching it.
 
 ### The cron entry
 
-Plesk → Scheduled Tasks, every minute:
+`app_update_toolkit` writes it, as root, on every run:
+`/etc/cron.d/12steptoolkit-api`, running
+`php artisan schedule:run` every minute as the site's user. Everything else —
+the queue worker, the prunes, the nonce sweep — runs inside that one entry. Do
+not add a Plesk Scheduled Task as well; the two together run everything twice a
+minute, and the command tells you if you have.
 
-```
-cd /var/www/vhosts/ibyteserver.com/WEBSITES/12steptoolkit.com/api && php artisan schedule:run
-```
-
-Everything else — the queue worker, the prunes, the nonce sweep — runs inside
-that one entry.
-
-**Rollback:** delete the vhost. Nothing was touched.
+**Rollback:** delete the nginx blocks. The three prefixes go back to being
+404s and nothing else was touched.
 
 ---
 

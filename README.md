@@ -131,6 +131,24 @@ What the 88 cover:
   and none of those strings may appear on any of them. A new panel, a debug
   dump, an exception or a `select *` that leaks one fails this test by name.
 
+## Deploying it
+
+```bash
+app_update_toolkit              # pull origin/main and deploy it
+app_update_toolkit --check      # report only; changes nothing
+app_update_toolkit --rollback   # back to the commit before the last deploy
+```
+
+The same shape as BohriConnect's `app_update` and AA Big Book's
+`app_update_bigbook`: run as root from anywhere, it switches to the site's user,
+takes the site down behind a 503 only if it has to, migrates, rebuilds caches,
+reloads PHP-FPM, smoke-tests the live URLs and runs `app:check`. A deploy with
+nothing to pull never goes down at all. Fail before a migration and the previous
+commit goes back by itself; fail after one and it stays down on purpose, because
+old code against a new schema is not a decision to make automatically.
+
+`docs/DEPLOYMENT.md` is the first install, step by step.
+
 ## Three commands worth knowing about
 
 ```bash
@@ -168,7 +186,9 @@ a token. `docs/STORE_SETUP.md` is the matching checklist.
 |------|-----------------|
 | `ARCHITECTURE.md` | why the old contract is the main one, how the three applications are kept apart, what each legacy hole was and what replaced it |
 | `IMPLEMENTATION_STATUS.md` | what is built, what is stubbed, what is not started |
+| `docs/DEPLOYMENT.md` | the first install — `api/` beside the website's document root, three nginx prefixes, then `app_update_toolkit` for ever after |
 | `docs/CUTOVER.md` | the order of the switch-over, and how to switch back |
+| `docs/WEBSITE_TAKEOVER.md` | what has to be true before `12steptoolkit.com`'s document root can move here — 205 indexed URLs, measured |
 | `docs/STORE_SETUP.md` | what to click in App Store Connect, Cloud Console and the Play Console, and how to read `billing:check` |
 | `docs/ENTITLEMENT_RULES.md` | who is premium and why — our own rules, replacing RevenueCat's |
 | `docs/OPEN_QUESTIONS.md` | the things that cannot be answered by reading code, each with the one command or screen that answers it — section A is now closed by the schema dump, and A6 is a live bug it turned up |

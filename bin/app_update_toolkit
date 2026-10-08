@@ -1,0 +1,201 @@
+#!/usr/bin/env bash
+#
+# app_update_toolkit — deploy the 12 Step Toolkit API, from anywhere, as anybody.
+#
+#   app_update_toolkit                 pull origin/main and deploy it
+#   app_update_toolkit --check         what would be pulled + health checks; changes nothing
+#   app_update_toolkit --rollback      back to the commit before the last deploy
+#   app_update_toolkit --rollback <commit> [--force]
+#
+# All this file does is make sure ../deploy.sh runs as the site's user — the
+# owner of the checkout (override with APP_USER=…):
+#
+#   * as root        it switches to that user (sudo -u USER -H, login shell, so
+#                    their PATH, HOME, git config and deploy key apply), then
+#                    reloads the site's PHP-FPM service, runs the smoke test and
+#                    keeps the scheduler's cron entry in /etc/cron.d up to date;
+#   * as that user   it runs deploy.sh directly (no sudo needed to be yourself);
+#   * as anyone else it refuses.
+#
+# Why it matters: git refuses a repository owned by somebody else ("dubious
+# ownership"), so a deploy run as root would pull nothing and quietly rebuild
+# the old code — a fix that "does not work", which sends you to look at the fix.
+#
+# ROOT RUNS A ROOT-OWNED COPY, never this file in the checkout: the checkout
+# belongs to the site's user, the same user PHP runs as, so anything that could
+# change a file there would otherwise get root at your next deploy. Install (and
+# after reviewing a change to this file, re-install) the copy as root:
+#
+#   install -o root -g root -m 755 \
+#       /var/www/vhosts/ibyteserver.com/WEBSITES/12steptoolkit-api/bin/app_update_toolkit \
+#       /usr/local/sbin/app_update_toolkit
+#   sed -i 's|^APP_DIR_INSTALLED=.*|APP_DIR_INSTALLED=/var/www/vhosts/ibyteserver.com/WEBSITES/12steptoolkit-api|' \
+#       /usr/local/sbin/app_update_toolkit
+#
+# Unlike aa-bigbook, this repository's root IS the application root — there is
+# no api/ subfolder — so APP_DIR is the checkout itself and the cron file is
+# named after it rather than after its parent.
+set -euo pipefail
+
+# Set in the root-owned copy only (see above). Empty here, in the checkout.
+APP_DIR_INSTALLED=""
+
+SELF="$(readlink -f "${BASH_SOURCE[0]}")"
+APP_DIR="${APP_DIR:-${APP_DIR_INSTALLED:-$(cd "$(dirname "$SELF")/.." && pwd -P)}}"
+DEPLOY="$APP_DIR/deploy.sh"
+NAME="$(basename "$0")"
+
+[ -f "$DEPLOY" ] || { echo "$NAME: there is no deploy.sh in $APP_DIR." >&2; exit 1; }
+
+APP_USER="${APP_USER:-$(stat -c %U "$APP_DIR")}"
+if [ "$APP_USER" = root ]; then
+    echo "$NAME: $APP_DIR belongs to root. It should belong to the site's user, e.g.:" >&2
+    echo "  chown -R <site user>:psacln $APP_DIR" >&2
+    exit 1
+fi
+
+# A dropped SSH connection must not stop the run (or the PHP-FPM reload after it).
+trap '' HUP
+
+if [ "$(id -un)" = "$APP_USER" ]; then
+    [ -x "$DEPLOY" ] || { echo "$NAME: $DEPLOY is not executable (chmod +x it)." >&2; exit 1; }
+    DEPLOY_NAME="$NAME" exec "$DEPLOY" "$@"
+fi
+
+if [ "$(id -u)" -ne 0 ]; then
+    echo "$NAME: run this as root or as $APP_USER — you are $(id -un)." >&2
+    exit 1
+fi
+
+# ── as root ──────────────────────────────────────────────────────────────────
+# Only a copy that the site's user cannot change may run as root.
+dir_of_self="$(dirname "$SELF")"
+if [ -z "$APP_DIR_INSTALLED" ] || [ "$(stat -c %u "$SELF")" != 0 ] || [ "$(stat -c %u "$dir_of_self")" != 0 ] \
+    || [ $(( 8#$(stat -c %a "$SELF") & 8#022 )) -ne 0 ] || [ $(( 8#$(stat -c %a "$dir_of_self") & 8#022 )) -ne 0 ]; then
+    echo "$NAME: as root, run the root-owned copy of this script, not $SELF." >&2
+    echo "  Install it once (docs/DEPLOYMENT.md §6):" >&2
+    echo "    install -o root -g root -m 755 $APP_DIR/bin/app_update_toolkit /usr/local/sbin/$NAME" >&2
+    echo "    sed -i 's|^APP_DIR_INSTALLED=.*|APP_DIR_INSTALLED=$APP_DIR|' /usr/local/sbin/$NAME" >&2
+    echo "  Or run it as the site's user: sudo -u $APP_USER -H $APP_DIR/bin/app_update_toolkit" >&2
+    exit 1
+fi
+
+as_user() { sudo -u "$APP_USER" -H "$@"; }
+run_deploy() { # run_deploy [env assignments…] -- [deploy.sh arguments…]
+    local args=(env "DEPLOY_NAME=$NAME")
+    while [ "$1" != -- ]; do args+=("$1"); shift; done
+    shift
+    # sudo resets the environment: pass the deploy settings across explicitly.
+    local var
+    for var in BRANCH REMOTE PHP FPM_UNIT COMPOSER_PHAR SMOKE_TEST; do
+        if [ -n "${!var:-}" ]; then args+=("$var=${!var}"); fi
+    done
+    args+=("$DEPLOY" "$@")
+    as_user bash -lc "$(printf '%q ' "${args[@]}")"
+}
+
+echo "$NAME: running $DEPLOY as $APP_USER"
+
+# Start the site user's login shell somewhere it may enter (not root's home),
+# or its profile scripts complain "cd: /root: Permission denied".
+cd "$APP_DIR" 2>/dev/null || cd /
+
+marker="$APP_DIR/storage/framework/deploy-fpm-reload"
+as_user rm -f -- "$marker" 2>/dev/null || true
+
+code=0
+run_deploy DEPLOY_VIA_ROOT=1 -- "$@" || code=$?
+
+# deploy.sh leaves the site's PHP-FPM unit in the marker (and "smoke <status>"
+# when it put the smoke test off until after the reload). The marker belongs to
+# the site's user, so it is read AS that user and only a Plesk FPM unit of this
+# site's own domain is accepted.
+if as_user test -f "$marker" 2>/dev/null; then
+    content="$(timeout 5 sudo -u "$APP_USER" head -c 300 -- "$marker" 2>/dev/null || true)"
+    as_user rm -f -- "$marker" 2>/dev/null || true
+    unit="$(printf '%s\n' "$content" | sed -n 1p | tr -d '[:space:]')"
+    smoke="$(printf '%s\n' "$content" | sed -n 2p)"
+    app_url="$(as_user grep -E '^[[:space:]]*APP_URL[[:space:]]*=' "$APP_DIR/.env" 2>/dev/null | tail -n 1 || true)"
+    host="$(printf '%s' "${app_url#*=}" | sed -E 's/[[:space:]]+#.*$//' | tr -d "\"' " | sed -E 's#^[a-z]+://##; s#[:/].*$##')"
+
+    if [ -n "${FPM_UNIT:-}" ] && [ "$unit" = "$FPM_UNIT" ]; then
+        allowed=1   # named by root on the command line
+    elif [ -n "$host" ] && [[ "$unit" =~ ^plesk-php[0-9]+-fpm_(.+)_[0-9]+\.service$ ]] && [ "${BASH_REMATCH[1]}" = "$host" ]; then
+        allowed=1
+    else
+        allowed=0
+    fi
+
+    if [ "$allowed" = 1 ]; then
+        if systemctl reload "$unit"; then
+            echo "  ✓ Reloaded $unit"
+        else
+            echo "  ! Could not reload $unit — run: systemctl reload $unit" >&2
+            code=1
+        fi
+        if [[ "$smoke" =~ ^smoke\ ?([0-9]*)$ ]]; then
+            run_deploy "DEPLOY_PRE_UP=${BASH_REMATCH[1]}" -- --smoke || code=1
+        fi
+    else
+        echo "  ! Ignored an unexpected PHP-FPM unit name; nothing was reloaded." >&2
+    fi
+fi
+
+# ── the scheduler's cron entry ───────────────────────────────────────────────
+# One file in /etc/cron.d per checkout: every minute, as the site's user,
+# `php artisan schedule:run` — which runs the queue worker (sign-in emails and
+# the reminder sender), the prunes and the nonce sweep. Root rewrites it on
+# every run, so it always points at this checkout and this PHP and nobody has
+# to add or remember a Plesk task. Only root-controlled values go into it.
+# To stop it: delete the file.
+cron_name="$(basename "$APP_DIR")"
+cron_file="/etc/cron.d/12steptoolkit-${cron_name//[^A-Za-z0-9_-]/-}"
+check_only=0
+for arg in "$@"; do [ "$arg" = --check ] && check_only=1; done
+
+cron_php=""
+for candidate in "${PHP:-}" /opt/plesk/php/8.4/bin/php /opt/plesk/php/8.5/bin/php "$(command -v php || true)"; do
+    if [ -n "$candidate" ] && [ -x "$candidate" ]; then cron_php="$candidate"; break; fi
+done
+
+if [ ! -d /etc/cron.d ]; then
+    echo "  ! /etc/cron.d does not exist here — add the scheduler as a Plesk Scheduled Task instead (DEPLOYMENT.md §5)." >&2
+elif [ -z "$cron_php" ]; then
+    echo "  ! No PHP found for the scheduler's cron entry (set PHP=…)." >&2
+elif [ ! -f "$APP_DIR/vendor/autoload.php" ]; then
+    echo "  ! The scheduler's cron entry is written after the first successful deploy." >&2
+else
+    cron_body="# 12 Step Toolkit scheduler for $APP_DIR
+# Written by $NAME (as root) on every run — edits here are overwritten.
+# Every minute, as $APP_USER: php artisan schedule:run. Delete this file to stop it.
+SHELL=/bin/sh
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+MAILTO=\"\"
+* * * * * $APP_USER cd $APP_DIR && $cron_php artisan schedule:run >> /dev/null 2>&1"
+    if [ "$(cat "$cron_file" 2>/dev/null || true)" = "$cron_body" ]; then
+        echo "  ✓ Scheduler runs every minute ($cron_file)"
+    elif [ "$check_only" = 1 ]; then
+        echo "  ! Scheduler cron entry $([ -f "$cron_file" ] && echo "is out of date" || echo "is missing") — a normal $NAME run (as root) writes $cron_file" >&2
+        code=1
+    else
+        tmp="$(mktemp /etc/.12steptoolkit-cron.XXXXXX)"
+        printf '%s\n' "$cron_body" > "$tmp"
+        chmod 644 "$tmp"
+        mv -f "$tmp" "$cron_file"
+        echo "  ✓ Scheduler cron entry written: $cron_file (runs every minute as $APP_USER)"
+    fi
+    # The same job as a Plesk Scheduled Task as well would run it twice a minute.
+    user_cron="$(crontab -l -u "$APP_USER" 2>/dev/null || true)"
+    if awk -v d="$APP_DIR" 'index($0, d) && /schedule:run/ && !/^[[:space:]]*#/ {f=1} END {exit !f}' <<<"$user_cron"; then
+        echo "  ! Plesk → Scheduled Tasks (the crontab of $APP_USER) also runs schedule:run for this folder — delete that task, the cron file above replaces it." >&2
+    fi
+fi
+
+# Remind whoever runs this when the copy in the checkout has moved on.
+if ! diff -q <(grep -v '^APP_DIR_INSTALLED=' "$SELF") \
+              <(as_user cat -- "$APP_DIR/bin/app_update_toolkit" 2>/dev/null | grep -v '^APP_DIR_INSTALLED=') >/dev/null 2>&1; then
+    echo "  ! $APP_DIR/bin/app_update_toolkit differs from this copy ($SELF)." >&2
+    echo "    Review the change, then re-install it as described at the top of the file." >&2
+fi
+
+exit "$code"

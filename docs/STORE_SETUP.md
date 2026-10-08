@@ -7,7 +7,7 @@ Everything here is checked by one command, so read this once and then let the
 command do the remembering:
 
 ```bash
-cd /var/www/vhosts/ibyteserver.com/WEBSITES/12steptoolkit.app/api
+cd /var/www/vhosts/ibyteserver.com/WEBSITES/12steptoolkit.com/api
 php artisan billing:check
 ```
 
@@ -54,7 +54,7 @@ says which one your key is, because asking is the only way to find out.
 APPLE_BUNDLE_ID=com.12stepapp.recoverybox
 APPLE_ISSUER_ID=        # the one UUID at the top of the Integrations page
 APPLE_KEY_ID=           # the KEYID out of AuthKey_KEYID.p8
-APPLE_PRIVATE_KEY_PATH=/var/www/vhosts/ibyteserver.com/secrets/12steptoolkit/AuthKey_XXXXXXXXXX.p8
+APPLE_PRIVATE_KEY_PATH=/var/www/vhosts/ibyteserver.com/secrets/12steptoolkit/AuthKey_K67LBBDQSX.p8
 
 # Only if the catalogue key is a different one. Left empty, the three above
 # are used, which is right when one Team key does both jobs.
@@ -69,10 +69,15 @@ needs it; run `billing:check` and it prints the value to paste in.
 ## 2. Apple: App Store Server Notifications V2
 
 App Store Connect → the app → **App Information** → **App Store Server
-Notifications** → Production Server URL:
+Notifications** → Production Server URL.
+
+The host is `12steptoolkit.com` and the path is under `/api/v2`, which nginx
+routes to this application — see `docs/DEPLOYMENT.md`. Both stay the same even
+if the document root ever moves here, because changing a notification URL that
+two stores are already posting to is not a change worth making twice:
 
 ```
-https://12steptoolkit.app/api/v2/webhooks/apple
+https://12steptoolkit.com/api/v2/webhooks/apple
 ```
 
 Until this is set, `billing:check` reports `4040007` — **which means the key is
@@ -104,7 +109,7 @@ propagate, so a refusal immediately after granting is worth one retry.
 
 ```dotenv
 GOOGLE_PACKAGE_NAME=com.ibyteapps.aa12steptoolkit
-GOOGLE_PLAY_CREDENTIALS=/var/www/vhosts/ibyteserver.com/secrets/12steptoolkit/your-service-account.json
+GOOGLE_PLAY_CREDENTIALS=/var/www/vhosts/ibyteserver.com/secrets/12steptoolkit/aa-12-step-toolkit-34263e634ffa.json
 ```
 
 `billing:check` reads `project_id` and `client_email` out of the file itself and
@@ -119,7 +124,7 @@ give `google-play-developer-notifications@system.gserviceaccount.com` the
 pointing at:
 
 ```
-https://12steptoolkit.app/api/v2/webhooks/google
+https://12steptoolkit.com/api/v2/webhooks/google
 ```
 
 ---
@@ -135,7 +140,7 @@ permissions:
 
 ```bash
 cd /Users/tushar/Work/Websites/12StepToolkit
-zip -j store-keys.zip secrets/12steptoolkit/AuthKey_XXXXXXXXXX.p8 secrets/12steptoolkit/your-service-account.json
+zip -j store-keys.zip files/keys/AuthKey_K67LBBDQSX.p8 files/keys/aa-12-step-toolkit-34263e634ffa.json
 ```
 
 Upload `store-keys.zip` in Plesk's File Manager to
@@ -149,7 +154,7 @@ rm -f store-keys.zip
 ```
 
 ```bash
-cd /var/www/vhosts/ibyteserver.com/WEBSITES/12steptoolkit.app/api
+cd /var/www/vhosts/ibyteserver.com/WEBSITES/12steptoolkit.com/api
 php artisan config:clear
 php artisan billing:check
 ```

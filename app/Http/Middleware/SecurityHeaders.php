@@ -25,8 +25,22 @@ class SecurityHeaders
             default => 'strict-origin-when-cross-origin',
         });
 
-        // Staging copy of the website: keep it out of search results without changing the pages.
-        if (config('site.noindex') && ! $request->is('api/*')) {
+        /*
+         | Out of search results. Two reasons, and the console's does not
+         | depend on a switch:
+         |
+         |  * **the console, always.** A staff login page has no business in
+         |    an index, and `site.noindex` goes false the day this application
+         |    serves the public website — which must not be the day
+         |    `/console/login` becomes indexable.
+         |  * **everything else, while `site.noindex` is on**, which it is
+         |    while this application does not serve the website.
+         |
+         | Never the API: a crawler has no business there either way, and the
+         | header would only raise the question of whether /api/v2 is a place
+         | to look.
+         */
+        if ($console || (config('site.noindex') && ! $request->is('api/*'))) {
             $response->headers->set('X-Robots-Tag', 'noindex, nofollow');
         }
 
