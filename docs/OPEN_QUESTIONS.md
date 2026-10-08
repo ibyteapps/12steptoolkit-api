@@ -418,50 +418,32 @@ day of real traffic.
 
 ---
 
-### C5a. Do the three 2024 à-la-carte unlocks grant anything today?
+### C5a. The retired à-la-carte unlocks — **closed 2026-10-08**
 
-**The one question in the catalogue I cannot answer by reading code.**
+`steps8and9`, `steps10and11`, `otherfeatures` grant **nothing**. Owner's
+decision, reversing an earlier call to grant them full premium: the sales are
+roughly a decade old and there were only ever a few.
 
-`steps8and9`, `steps10and11` and `otherfeatures` (all Jan 2024) predate the
-single `subscribed` entitlement. Nothing in either shipped client reads a
-product id, so whether somebody who bought one of these has anything today
-depends entirely on **whether RevenueCat attaches those three products to the
-`subscribed` entitlement**.
+Two things the investigation established, which stand either way:
 
-* **If it does** — they already have full premium, this server needs to do
-  nothing, and the config rows exist only so the console can name them.
-* **If it does not** — those people paid and have had nothing since. That is a
-  live bug in the current app, not a decision about the rebuild, and it is worth
-  knowing how many accounts it is.
+* **No entitlement was ever attached** to any of the three in RevenueCat — all
+  three show "Attach" rather than a count.
+* **`19/add_order.php` writes a `subscription_orders` row and nothing else.**
+  It never touches `accounts.subscribed`.
 
-**What to look at:** RevenueCat dashboard → Products, and check whether those
-three are attached to the `subscribed` entitlement. One screen.
+So they have granted nothing from either direction since they were sold, and
+nobody has raised it in ten years. The orders remain in `subscription_orders`
+and the console shows them, so anyone who does surface is granted by hand with
+an audit row. See `ENTITLEMENT_RULES.md` R2.
 
-**Meanwhile:** `grants => 'unresolved'`, which grants nothing from this server.
-Nobody loses access, because every current entitlement comes through the
-RevenueCat bridge and the bridge does not consult that table. Guessing generous
-here would hand lifetime premium to a cohort nobody has counted; guessing mean
-would take away something somebody paid for. Neither is a guess worth making for
-a fact that is one screen away.
+### C6. The sponsor bundles — **closed 2026-10-08, unsold**
 
-### C6. Do `annual_3` / `quarterly_3` carry three sponsee slots?
+`annual_3` and `quarterly_3` are **not in RevenueCat at all**, and the Android
+app buys through RevenueCat packages — so a product that is not there was never
+purchasable in-app and nobody holds one.
 
-"Sponsor & 3 Sponsees", both Jan 2024, neither with a live offer — so they look
-superseded by the one-slot consumables, which is what the client's gifting flow
-actually buys.
-
-They grant the **buyer** a subscription; that much is certain and is what the
-config does. What is not certain is whether they also entitle three sponsees,
-and if so by what mechanism — RevenueCat cannot express it, so it would have to
-be server logic reading the sku.
-
-**Meanwhile:** no slots are created. This is the one deliberately ungenerous
-call in a resolver whose rule is to err generously, and the asymmetry is why —
-granting a subscription wrongly affects one person who paid for something;
-creating three slots wrongly hands free premium to three accounts that did not.
-
-**What settles it:** whether either product has ever sold. If Play shows no
-purchases, the question closes with "unsold, ignore".
+Both stay mapped as plain subscriptions with no slots, so that if one ever does
+arrive the person gets access rather than nothing.
 
 ## D. Changes to the live database I recommend but will not make
 

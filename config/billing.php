@@ -78,27 +78,93 @@ return [
         'accept_sandbox' => filter_var(env('APPLE_ACCEPT_SANDBOX', true), FILTER_VALIDATE_BOOL),
 
         /*
-         | Product id → what it grants. Taken from the project's own StoreKit
-         | configuration (`12 Step Toolkit.storekit`), which is the local mirror
-         | of App Store Connect. **Check this against App Store Connect before
-         | the cutover** — a product id that is wrong here is a purchase that
-         | grants nothing, and a product id can never be renamed afterwards.
+         | Product id → what it grants. **Reconciled 2026-10-08** against the
+         | RevenueCat product list, which is the only place both stores are
+         | visible at once and the only place the pairings were ever recorded.
+         | Twelve live Apple products, and one awaiting its first submission.
          |
-         | Two subscription groups exist, which is unusual and is the old app's
-         | history rather than a design: group 20509670 "Unlock Premium" holds
-         | the original `…annual`, and group 20641515 "Unlock All Features"
-         | holds the current `…annual1` and `…quarterly1`. Anyone still on the
-         | old group keeps their subscription; it is simply not sold any more.
+         | ## Two subscription groups, which is history rather than design
+         |
+         | Group "Unlock All Features" holds six, ranked by level — and level is
+         | the only thing telling Apple whether a switch between two of them is
+         | an upgrade (immediate, prorated) or a downgrade (deferred to the end
+         | of the paid period). Group "Unlock Premium" holds only the original
+         | `…annual`, which is not sold any more; anyone still on it keeps it.
+         | A person can hold one subscription from *each* group at once, which
+         | R8 handles by taking the most generous.
          */
         'products' => [
-            'com.12stepapp.recoverybox.annual' => ['cycle' => 'annual', 'grants' => 'subscription'],
-            'com.12stepapp.recoverybox.annual1' => ['cycle' => 'annual', 'grants' => 'subscription'],
-            'com.12stepapp.recoverybox.quarterly1' => ['cycle' => 'quarterly', 'grants' => 'subscription'],
 
-            // Consumables a sponsor buys to unlock the app for a sponsee. They
-            // grant nothing to the buyer; `SponseeGifts` turns one into a slot.
-            'com.12stepapp.recoverybox.annual_sponsee1' => ['cycle' => 'annual', 'grants' => 'sponsee_gift', 'slots' => 1],
-            'com.12stepapp.recoverybox.quarterly_sponsee1' => ['cycle' => 'quarterly', 'grants' => 'sponsee_gift', 'slots' => 1],
+            // ── Group "Unlock All Features", by level ────────────────────
+            'com.12stepapp.recoverybox.annual1' => ['cycle' => 'annual', 'grants' => 'subscription', 'level' => 1, 'label' => 'Annual'],
+            'com.12stepapp.recoverybox.quarterly1' => ['cycle' => 'quarterly', 'grants' => 'subscription', 'level' => 2, 'label' => 'Quarterly'],
+            'com.12stepapp.recoverybox.annual1999' => ['cycle' => 'annual', 'grants' => 'subscription', 'level' => 3, 'label' => 'Annual'],
+
+            /*
+             | ⚠ THE PRODUCT ID IS LITERALLY `Quarterly`, AND THAT IS NOT A
+             | TRANSCRIPTION ERROR. Created 28 Nov 2025 for the Christmas flash
+             | sale, with the id and the reference name entered into each
+             | other's fields: its *name* in both App Store Connect and
+             | RevenueCat is `com.12stepapp.recoverybox.annual1999`, which is
+             | the id of a different product three levels above it.
+             |
+             | Two consequences worth keeping written down. Every sale of this
+             | product is **reported under the annual product's name** until the
+             | display names are corrected in both consoles — the ids cannot be.
+             | And it is ranked above the regular quarterly at level 5, so
+             | somebody switching onto the sale upgrades immediately with
+             | credit for unused days, which is the right behaviour for a sale
+             | but comes from the ranking and not from the price.
+             |
+             | `promotional` so it can be counted separately; `hidden` so it
+             | never appears in a list of plans anybody can choose from.
+             */
+            'Quarterly' => ['cycle' => 'quarterly', 'grants' => 'subscription', 'level' => 4, 'label' => 'Quarterly, flash sale', 'promotional' => true, 'hidden' => true],
+
+            'com.12stepapp.recoverybox.quarterly999' => ['cycle' => 'quarterly', 'grants' => 'subscription', 'level' => 5, 'label' => 'Quarterly'],
+            'com.12stepapp.recoverybox.weekly1' => ['cycle' => 'weekly', 'grants' => 'subscription', 'level' => 6, 'label' => 'Weekly'],
+
+            // ── Group "Unlock Premium" — the original, no longer sold ────
+            // Carries a one-week free introductory offer (`.storekit:187-192`).
+            'com.12stepapp.recoverybox.annual' => ['cycle' => 'annual', 'grants' => 'subscription', 'level' => 1, 'label' => 'Annual (original)'],
+
+            /*
+             | ⚠ LIFETIME, SOLD AS A **CONSUMABLE**, WHICH IS THE DEFECT THIS
+             | ENTRY EXISTS TO SURVIVE. Apple does not return consumables from
+             | `Transaction.currentEntitlements`, so a naive restore loses every
+             | one of these buyers on a reinstall or a new phone. They are still
+             | recoverable — consumables do appear in `Transaction.all` and in
+             | the App Store Server API's transaction history — so the restore
+             | path MUST read history rather than entitlements. A product's type
+             | cannot be changed after creation, hence the replacement below.
+             */
+            'com.12stepapp.recoverybox.profeatures' => ['cycle' => 'lifetime', 'grants' => 'subscription', 'label' => 'Lifetime (consumable, legacy)', 'restore_via' => 'transaction_history'],
+
+            /*
+             | The replacement, created 2026-10-08: a proper non-consumable, so
+             | it restores. Not yet approved — Apple requires a first
+             | non-consumable to be submitted alongside a new app version, so it
+             | goes live with 2.0 and not before. Mapped in advance because a
+             | product that is not mapped grants nothing, and the day it is
+             | approved is not a day to be editing config.
+             |
+             | Family Sharing is OFF and staying off — see ENTITLEMENT_RULES R13.
+             */
+            'com.12stepapp.recoverybox.profeatures_non_consumable' => ['cycle' => 'lifetime', 'grants' => 'subscription', 'label' => 'Lifetime'],
+
+            /*
+             | Consumables a sponsor buys to unlock the app for one sponsee.
+             | They grant the **buyer** nothing; a gift becomes a slot. The
+             | `_1999` / `_999` pair is the same grant at a later price.
+             |
+             | Confirmed against RevenueCat: all four have no entitlement
+             | attached, which is correct and is the behaviour this mapping
+             | preserves.
+             */
+            'com.12stepapp.recoverybox.annual_sponsee1' => ['cycle' => 'annual', 'grants' => 'sponsee_gift', 'slots' => 1, 'label' => 'Gift, 1 sponsee, annual'],
+            'com.12stepapp.recoverybox.quarterly_sponsee1' => ['cycle' => 'quarterly', 'grants' => 'sponsee_gift', 'slots' => 1, 'label' => 'Gift, 1 sponsee, quarterly'],
+            'com.12stepapp.recoverybox.annual_sponsee1_1999' => ['cycle' => 'annual', 'grants' => 'sponsee_gift', 'slots' => 1, 'label' => 'Gift, 1 sponsee, annual'],
+            'com.12stepapp.recoverybox.quarterly_sponsee1_999' => ['cycle' => 'quarterly', 'grants' => 'sponsee_gift', 'slots' => 1, 'label' => 'Gift, 1 sponsee, quarterly'],
         ],
 
         /*
@@ -127,109 +193,83 @@ return [
         'credentials' => env('GOOGLE_PLAY_CREDENTIALS'),
 
         /*
-         | Play product id → what it grants. **From the live Play Console
-         | catalogue, supplied 2026-10-08**: 8 subscriptions and 9 one-time
-         | products. This replaced four guessed entries.
+         | Play product id → what it grants. **Reconciled 2026-10-08** against
+         | the RevenueCat product list. Fifteen live products.
          |
-         | ## Why this list is much less load-bearing than it looks
+         | ## Keyed on the product, with the base plan beside it
          |
-         | Neither shipped app decides anything from a product id. The Android
-         | client asks RevenueCat for one entitlement — `subscribed` — and reads
-         | `isActive` (`RevCatManager.kt:58, 95`). It records
-         | `sku = ent.productIdentifier` only as a label, buys by RevenueCat
-         | *package* identifier (`$rc_weekly`, `$rc_annual`, …), and decides
-         | "lifetime" from a **null or zero expiry**, not from the id
-         | (`:499`). `EntitlementService` here already does the same.
+         | RevenueCat displays a Play subscription as `productId:basePlanId` —
+         | `annual:p1y`, `quarterly_2025:p3m999`, `weekly:weekly`. The Play
+         | Developer API does not: `purchases.subscriptionsv2.get` reports
+         | `lineItems[].productId` and `offerDetails.basePlanId` as separate
+         | fields. So the key here is the **product id alone**, and the base
+         | plan is recorded beside it. Keyed on the joined form, nothing would
+         | ever match and every Google purchase would come back unmapped.
          |
-         | So this table is not what keeps anybody premium. It does three
-         | narrower jobs, and only the second one can go wrong quietly:
+         | ## The duplicates stay, for ever
          |
-         |  1. a human-readable plan label for Settings and the console;
-         |  2. **telling a sponsee gift from a self-purchase**, which a webhook
-         |     cannot infer any other way — the client knows because it chose
-         |     the `sponsee_annual` package, but a Google RTDN arrives with a
-         |     product id and nothing else, and a gift must credit a *different*
-         |     account through `sponsee_orders`;
-         |  3. the cycle, for reconciliation.
-         |
-         | ## The duplicates are deliberate and all of them must stay
-         |
-         | `annual` / `annual_1999`, `quarterly` / `quarterly_2025`, and four
-         | separate `profeatures*` ids are the same entitlement re-published at a
-         | new price — Play will not let a product's price history be rewritten,
-         | so a price change is a new id. Everyone who bought an old one is still
-         | entitled. Which ids are *offered* is a RevenueCat dashboard question
-         | and never appears here; which are *honoured* is this list, and the
-         | answer is all of them, for ever.
+         | Play will not let a product's price history be rewritten, so a price
+         | change is a new id: `annual` / `annual_1999`, `quarterly` /
+         | `quarterly_2025`, and four separate `profeatures*`. Which ids are
+         | *offered* is a paywall question that never appears in this repo;
+         | which are *honoured* is this list, and the answer is all of them.
          */
         'products' => [
-            // --- Subscriptions, single user ---------------------------------
-            'weekly' => ['cycle' => 'weekly', 'grants' => 'subscription', 'label' => 'Weekly'],
-            'monthly' => ['cycle' => 'monthly', 'grants' => 'subscription', 'label' => 'Monthly'],
-            'quarterly' => ['cycle' => 'quarterly', 'grants' => 'subscription', 'label' => 'Quarterly'],
-            'quarterly_2025' => ['cycle' => 'quarterly', 'grants' => 'subscription', 'label' => 'Quarterly'],
-            'annual' => ['cycle' => 'annual', 'grants' => 'subscription', 'label' => 'Annual'],
-            'annual_1999' => ['cycle' => 'annual', 'grants' => 'subscription', 'label' => 'Annual'],
+            // ── Subscriptions ────────────────────────────────────────────
+            'weekly' => ['cycle' => 'weekly', 'grants' => 'subscription', 'base_plan' => 'weekly', 'label' => 'Weekly'],
+            'monthly' => ['cycle' => 'monthly', 'grants' => 'subscription', 'base_plan' => 'p1m', 'label' => 'Monthly'],
+            'quarterly' => ['cycle' => 'quarterly', 'grants' => 'subscription', 'base_plan' => 'p3m', 'label' => 'Quarterly'],
+            'quarterly_2025' => ['cycle' => 'quarterly', 'grants' => 'subscription', 'base_plan' => 'p3m999', 'label' => 'Quarterly'],
+            'annual' => ['cycle' => 'annual', 'grants' => 'subscription', 'base_plan' => 'p1y', 'label' => 'Annual'],
+            'annual_1999' => ['cycle' => 'annual', 'grants' => 'subscription', 'base_plan' => 'p1y1999', 'label' => 'Annual'],
 
             /*
-             | Subscriptions that also mention sponsees in their title —
-             | "Sponsor & 3 Sponsees". Both are from Jan 2024 and neither has a
-             | live offer, so they look superseded by the one-slot consumables
-             | below, which is what the client's gifting flow actually buys.
+             | The two "Sponsor & 3 Sponsees" bundles. **Not in RevenueCat at
+             | all**, and the Android app buys through RevenueCat packages — so
+             | a product that is not there was never purchasable in-app and
+             | nobody should hold one. `OPEN_QUESTIONS.md` C6 is closed as
+             | unsold.
              |
-             | They grant the **buyer** a subscription, which is certain. They do
-             | *not* create sponsee slots here, which is the deliberately
-             | ungenerous half of an otherwise generous resolver: granting a
-             | subscription wrongly affects one person who paid, and creating
-             | three slots wrongly hands free premium to three accounts that did
-             | not. `docs/OPEN_QUESTIONS.md` C6 asks for the one fact that
-             | settles it.
+             | Mapped anyway, as plain subscriptions with no slots, so that if
+             | one ever does arrive the person gets access rather than nothing.
+             | Being generous to a purchase that should not exist costs less
+             | than refusing one that does.
              */
-            'quarterly_3' => ['cycle' => 'quarterly', 'grants' => 'subscription', 'label' => 'Quarterly, sponsor bundle', 'sponsee_slots_unconfirmed' => 3],
-            'annual_3' => ['cycle' => 'annual', 'grants' => 'subscription', 'label' => 'Annual, sponsor bundle', 'sponsee_slots_unconfirmed' => 3],
+            'annual_3' => ['cycle' => 'annual', 'grants' => 'subscription', 'label' => 'Annual, sponsor bundle (unsold)'],
+            'quarterly_3' => ['cycle' => 'quarterly', 'grants' => 'subscription', 'label' => 'Quarterly, sponsor bundle (unsold)'],
 
-            // --- One-time: the lifetime unlock, at four price points ---------
+            // ── One-time: the lifetime unlock, at four price points ───────
             'profeatures' => ['cycle' => 'lifetime', 'grants' => 'subscription', 'label' => 'Lifetime'],
             'profeatures1499' => ['cycle' => 'lifetime', 'grants' => 'subscription', 'label' => 'Lifetime'],
             'profeatures2999' => ['cycle' => 'lifetime', 'grants' => 'subscription', 'label' => 'Lifetime'],
-            'profeatures_discounted' => ['cycle' => 'lifetime', 'grants' => 'subscription', 'label' => 'Lifetime'],
+            'profeatures_discounted' => ['cycle' => 'lifetime', 'grants' => 'subscription', 'label' => 'Lifetime, sale', 'promotional' => true, 'hidden' => true],
 
-            /*
-             | Consumables a sponsor buys to unlock the app for one sponsee.
-             | These grant the buyer nothing; `SponseeGifts` turns one into a
-             | slot. The client reaches them through the `sponsee_annual` /
-             | `sponsee_quarterly` packages, and the iOS pair
-             | (`…annual_sponsee1`, `…quarterly_sponsee1`) is the same product.
-             */
+            // ── Consumables: a gift for one sponsee ──────────────────────
             'sponsee_1_annual' => ['cycle' => 'annual', 'grants' => 'sponsee_gift', 'slots' => 1, 'label' => 'Gift, 1 sponsee, annual'],
             'sponsee_1_quarterly' => ['cycle' => 'quarterly', 'grants' => 'sponsee_gift', 'slots' => 1, 'label' => 'Gift, 1 sponsee, quarterly'],
 
             /*
-             | The 2024 à-la-carte unlocks, and **the one genuinely open
-             | question in this file.**
+             | The à-la-carte unlocks, sold roughly a decade ago and retired
+             | long since. **They grant nothing** — the owner's decision,
+             | 2026-10-08, reversing an earlier call to grant them premium.
              |
-             | These predate the single `subscribed` entitlement. Nothing in
-             | either shipped client reads a product id, so whether somebody who
-             | bought `steps8and9` in 2024 has anything today depends entirely on
-             | whether RevenueCat attaches these three products to the
-             | `subscribed` entitlement:
+             | Two facts established while deciding, both of which stand: no
+             | entitlement was ever attached to any of the three in RevenueCat,
+             | and `19/add_order.php` writes a `subscription_orders` row without
+             | touching `accounts.subscribed`. So they have granted nothing from
+             | either direction since they were sold, and nobody has raised it
+             | in ten years.
              |
-             |  * if it does, they have full premium already, this server needs
-             |    to do nothing, and these rows exist only to label them;
-             |  * if it does not, those people paid and have had nothing since —
-             |    which would be a live bug in the current app, not a decision
-             |    about the rebuild.
-             |
-             | `grants => 'unresolved'` until that is known. An unresolved
-             | product is **recorded and grants nothing from this server**, and
-             | the console shows it as unmapped. Nobody loses access in the
-             | meantime, because every current entitlement comes through the
-             | RevenueCat bridge, which does not consult this table at all.
-             | `docs/OPEN_QUESTIONS.md` C5a.
+             | `none`, not `unresolved`: this is decided, and the two values
+             | must stay distinguishable. The orders remain in
+             | `subscription_orders` and the console shows them, so if somebody
+             | ever does surface they are granted by hand with an audit row —
+             | which is a better answer than a config entry nobody revisits.
+             | ENTITLEMENT_RULES R2.
              */
-            'steps8and9' => ['cycle' => 'lifetime', 'grants' => 'unresolved', 'label' => 'Steps 8 & 9 (2024 unlock)'],
-            'steps10and11' => ['cycle' => 'lifetime', 'grants' => 'unresolved', 'label' => 'Steps 10 & 11 (2024 unlock)'],
-            'otherfeatures' => ['cycle' => 'lifetime', 'grants' => 'unresolved', 'label' => 'Other features (2024 unlock)'],
+            'steps8and9' => ['cycle' => 'lifetime', 'grants' => 'none', 'label' => 'Steps 8 & 9 (retired)'],
+            'steps10and11' => ['cycle' => 'lifetime', 'grants' => 'none', 'label' => 'Steps 10 & 11 (retired)'],
+            'otherfeatures' => ['cycle' => 'lifetime', 'grants' => 'none', 'label' => 'Other features (retired)'],
         ],
 
         'pubsub_service_account' => env('GOOGLE_PUBSUB_SERVICE_ACCOUNT'),

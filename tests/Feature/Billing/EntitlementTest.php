@@ -195,17 +195,17 @@ it('runs a cancelled subscription to its end', function () {
         ->and($row->will_renew)->toBeFalse();
 });
 
-it('grants nothing for a 2024 à-la-carte unlock, which is not the same as not knowing it', function () {
-    // `steps8and9`, `steps10and11` and `otherfeatures` are in config so the
-    // console can name them, with `grants => 'unresolved'`. The gate used to be
-    // `! isUnmapped()` — is the id in the list — so listing them would have
-    // made them mapped, and a lifetime purchase with no expiry granted premium
-    // to anybody who bought a £2 step unlock in 2024.
+it('grants nothing for a retired à-la-carte unlock, and that is decided rather than unknown', function () {
+    // `steps8and9`, `steps10and11` and `otherfeatures` sold about a decade ago
+    // and grant nothing (ENTITLEMENT_RULES R2, owner's call 2026-10-08,
+    // reversing an earlier decision to grant them premium).
     //
-    // Whether they *should* grant anything is a RevenueCat dashboard question
-    // (docs/OPEN_QUESTIONS.md C5a). Until it is answered, generous is wrong:
-    // the people concerned are already served by the RevenueCat bridge, and
-    // guessing here would hand lifetime premium to a cohort nobody has counted.
+    // They are `none`, not absent and not `unresolved`. The gate used to be
+    // `! isUnmapped()` — is the id in the list — so listing them at all would
+    // have made them mapped, and a mapped lifetime purchase with no expiry
+    // granted premium. "Decided to grant nothing" and "not yet decided" have
+    // to be different values, and both have to be different from "never heard
+    // of it", because only the middle one is a question still open.
     foreach (['steps8and9', 'steps10and11', 'otherfeatures'] as $productId) {
         $sub = googleSub($this->account->id, [
             'product_id' => $productId,
@@ -215,11 +215,23 @@ it('grants nothing for a 2024 à-la-carte unlock, which is not the same as not k
 
         expect($sub->isUnmapped())->toBeFalse("$productId should be known");
         expect($sub->grantsSubscriberAccess())->toBeFalse("$productId must not grant");
+        expect(config('billing.google.products')[$productId]['grants'])->toBe('none');
         expect($this->service->refresh($this->account->id)->is_active)
             ->toBeFalse($productId);
 
         $sub->delete();
     }
+});
+
+it('still knows about a retired product, so the console can show the purchase', function () {
+    // The reason they stay in config at all. The orders are in
+    // `subscription_orders`, and if somebody ever does surface they are
+    // granted by hand — which needs the console to be able to name what they
+    // bought rather than showing an unmapped id.
+    $sub = googleSub($this->account->id, ['product_id' => 'steps8and9']);
+
+    expect($sub->mapping())->not->toBeNull();
+    expect($sub->mapping()['label'])->toContain('Steps 8 & 9');
 });
 
 it('does not make the buyer of a sponsee gift a subscriber', function () {
@@ -257,19 +269,88 @@ it('grants every price-refresh duplicate, for ever', function () {
     }
 });
 
-it('does not hand the sponsor bundles three sponsee slots on a guess', function () {
-    // "Sponsor & 3 Sponsees", both from Jan 2024 with no live offer. The buyer
-    // gets a subscription, which is certain. The three slots are not created,
-    // which is the one deliberately ungenerous call in a resolver whose rule is
-    // to err generously — granting a subscription wrongly affects one person
-    // who paid; creating three slots wrongly hands free premium to three
-    // accounts that did not. docs/OPEN_QUESTIONS.md C6.
+it('maps the sponsor bundles as plain subscriptions, since nobody can hold one', function () {
+    // "Sponsor & 3 Sponsees" — not in RevenueCat at all, and the Android app
+    // buys through RevenueCat packages, so they were never purchasable in-app.
+    // C6 closed as unsold.
+    //
+    // Mapped anyway, with no slots: being generous to a purchase that should
+    // not exist costs less than refusing one that does.
     foreach (['annual_3', 'quarterly_3'] as $productId) {
         $mapping = config('billing.google.products')[$productId];
 
         expect($mapping['grants'])->toBe('subscription', $productId);
-        expect($mapping)->not->toHaveKey('slots', $productId);
-        expect($mapping['sponsee_slots_unconfirmed'])->toBe(3, $productId);
+        expect(array_key_exists('slots', $mapping))->toBeFalse($productId);
+        expect(array_key_exists('sponsee_slots_unconfirmed', $mapping))
+            ->toBeFalse($productId);
+    }
+});
+
+it('maps the flash-sale quarterly, whose id really is just "Quarterly"', function () {
+    // Created 28 Nov 2025 with the id and the reference name entered into each
+    // other's fields: the *name* in both consoles is another product's id. The
+    // id cannot be changed, so the only defence is that it is written down.
+    $mapping = config('billing.apple.products')['Quarterly'];
+
+    expect($mapping['cycle'])->toBe('quarterly');
+    expect($mapping['grants'])->toBe('subscription');
+    expect($mapping['promotional'])->toBeTrue();
+    expect($mapping['hidden'])->toBeTrue();
+
+    // And it grants, because a sale is still a sale.
+    $sub = appleSub($this->account->id, ['product_id' => 'Quarterly', 'cycle' => 'quarterly']);
+    expect($sub->grantsSubscriberAccess())->toBeTrue();
+});
+
+it('maps the lifetime consumable AND its non-consumable replacement', function () {
+    // The consumable is the defect: Apple does not return consumables from
+    // `currentEntitlements`, so a naive restore loses every one of these
+    // buyers. `restore_via` is the flag that says the restore path has to read
+    // transaction history for this one. The replacement is mapped before it is
+    // approved, because the day it goes live is not a day to be editing config.
+    $legacy = config('billing.apple.products')['com.12stepapp.recoverybox.profeatures'];
+    $replacement = config('billing.apple.products')['com.12stepapp.recoverybox.profeatures_non_consumable'];
+
+    expect($legacy['restore_via'])->toBe('transaction_history');
+    expect($legacy['cycle'])->toBe('lifetime');
+    expect($replacement['cycle'])->toBe('lifetime');
+    expect(array_key_exists('restore_via', $replacement))->toBeFalse();
+
+    foreach ([$legacy, $replacement] as $m) {
+        expect($m['grants'])->toBe('subscription');
+    }
+});
+
+it('keys Google on the product id, with the base plan beside it', function () {
+    // RevenueCat shows `annual:p1y`; the Play API reports productId and
+    // basePlanId separately. Keyed on the joined form, nothing would ever
+    // match and every Google purchase would come back unmapped.
+    $products = config('billing.google.products');
+
+    expect(array_key_exists('annual', $products))->toBeTrue();
+    expect(array_key_exists('annual:p1y', $products))->toBeFalse();
+    expect($products['annual']['base_plan'])->toBe('p1y');
+    expect($products['quarterly_2025']['base_plan'])->toBe('p3m999');
+    expect($products['weekly']['base_plan'])->toBe('weekly');
+});
+
+it('has every Apple subscription ranked, because level decides upgrade or downgrade', function () {
+    // Level is the only thing telling Apple whether a switch is an upgrade
+    // (immediate, prorated) or a downgrade (deferred). A subscription without
+    // one is a switch Apple has to guess at.
+    $subscriptions = array_filter(
+        config('billing.apple.products'),
+        fn (array $m) => $m['grants'] === 'subscription' && $m['cycle'] !== 'lifetime',
+    );
+
+    expect($subscriptions)->not->toBeEmpty();
+    foreach ($subscriptions as $id => $mapping) {
+        // `array_key_exists`, not `toHaveKey($key, $reason)` — Pest reads that
+        // second argument as the expected *value*, so `toHaveKey('level', $id)`
+        // asserts that the level equals the product id. It fails loudly here;
+        // the `->not->toHaveKey('slots', $id)` form below passed silently,
+        // which is the worse half of the same mistake.
+        expect(array_key_exists('level', $mapping))->toBeTrue($id);
     }
 });
 
