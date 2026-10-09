@@ -89,6 +89,13 @@ A checklist, not a plan — each line is a thing to tick.
 5. **The 69 encoded story URLs 301 to their clean address**, and the clean
    address is the only one in the new sitemap.
 6. **`/app/reset/*` and `/app/validate2/*` answer**, still `Disallow`ed.
+   They are served by the legacy PHP app, which lives *inside the document
+   root* and is not produced by the Next build — the old deploy rsyncs with
+   `--exclude 'app/'` so as not to delete it. Move the root and nothing
+   serves it: every password-reset link already in somebody's inbox 404s.
+   `docs/nginx/12steptoolkit.com.conf` carries a commented `location ^~ /app/`
+   that keeps it answering from where it is; uncomment it in the same change
+   that moves the root.
 7. **`SITE_SERVES_WEBSITE=true` and `SITE_NOINDEX=false`** in `.env`. Both
    default the other way, because today this application does not own `/`;
    left as they are, the move would de-index all 205 URLs in a few days.
