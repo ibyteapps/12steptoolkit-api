@@ -9,6 +9,7 @@ use App\Http\Controllers\Api\V1\Android\IconController;
 use App\Http\Controllers\Api\V1\Android\InstallSecretController;
 use App\Http\Controllers\Api\V1\Android\RecordController;
 use App\Http\Controllers\Api\V1\Android\ReminderController;
+use App\Http\Controllers\Api\V1\Android\ReviewController;
 use App\Http\Controllers\Api\V1\Android\SponsorController;
 use App\Http\Controllers\Api\V1\Apple\AppleScriptController;
 use App\Http\Controllers\Api\V2\HealthController;
@@ -103,6 +104,14 @@ $android = function (): void {
         Route::post('update_account.php', [AccountController::class, 'updateAccount']);
         Route::post('update_account_details.php', [AccountController::class, 'updateDetails']);
         Route::post('get_counts.php', CountsController::class);
+
+        /*
+         | A sponsor marking a sponsee's Step work reviewed. `18/reviewed.php`
+         | updates by row id with no account and no sponsorship check, and
+         | interpolates the new value into the UPDATE; this one requires an
+         | accepted sponsorship in the right direction. See ReviewController.
+         */
+        Route::post('mark_reviewed.php', ReviewController::class);
 
         foreach (RecordController::ENDPOINTS as $script => $call) {
             Route::post($script, [RecordController::class, $call]);
