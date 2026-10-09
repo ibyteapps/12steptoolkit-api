@@ -172,6 +172,9 @@
             box-shadow: var(--shadow-sm);
         }
         header.site nav a.cta:hover { background: #2470a3; color: #fff; }
+        /* The web login keeps its place longest after the store button: it is
+           what a member who already has an account came here to find. */
+        @media (max-width: 860px) { header.site nav a.contact { display: none; } }
         @media (max-width: 640px) {
             header.site .wrap { gap: 8px; }
             header.site nav { gap: 0; }
@@ -182,6 +185,7 @@
             .brand .mark { width: 30px; height: 30px; border-radius: 9px; }
             .brand .mark img { width: 18px; height: 18px; }
         }
+        @media (max-width: 440px) { header.site nav a.weblogin { display: none; } }
         @media (max-width: 380px) { .brand b { display: none; } }
 
         /* ---- Page furniture ------------------------------------------ */
@@ -354,9 +358,14 @@
                 <span class="mark" aria-hidden="true"><img src="/images/design-logo.webp" alt="" width="21" height="21"></span>
                 <b>12 Step Toolkit</b>
             </a>
+            {{-- The production site's top level was Literature, Blog, Web
+                 Login and Contact Us. The web app link is the one people go
+                 looking for and the port had dropped it. --}}
             <nav aria-label="Main">
                 <a class="lit" href="/aa-literature">A.A. Literature</a>
-                <a href="/blog">Blog</a>
+                <a class="lit" href="/blog">Blog</a>
+                <a class="contact" href="/contacts">Contact</a>
+                <a class="weblogin" href="{{ config('site.identity.webApp') }}">Web login</a>
                 <a class="cta" href="/get-app">Get the app</a>
             </nav>
         </div>
@@ -412,6 +421,7 @@
                         <li><a href="/get-app">Get the app</a></li>
                         <li><a href="/blog">Blog</a></li>
                         <li><a href="/contacts">Contact us</a></li>
+                        <li><a href="{{ config('site.identity.webApp') }}">Web login</a></li>
                     </ul>
                 </div>
                 <div>
