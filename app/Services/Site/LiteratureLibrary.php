@@ -3,6 +3,7 @@
 namespace App\Services\Site;
 
 use Illuminate\Support\Collection;
+use Illuminate\Support\Str;
 
 /**
  * The A.A. literature, as the public website serves it.
@@ -32,6 +33,29 @@ class LiteratureLibrary
         'prayers' => 'Prayers',
         'readings' => 'Readings',
     ];
+
+    /**
+     * What one item in each section is, in singular, for counting.
+     *
+     * "29 pages" was wrong on every card: these are not pages of anything,
+     * and a member looking for Dr. Bob's Nightmare is counting stories. The
+     * Big Book section holds the eleven chapters along with the preface, the
+     * two forewords, the Doctor's Opinion and two stories, so it counts
+     * "parts" rather than claiming seventeen chapters.
+     */
+    public const UNITS = [
+        'big-book' => 'part',
+        'stories-edition-1' => 'story',
+        'stories-edition-2' => 'story',
+        'prayers' => 'prayer',
+        'readings' => 'reading',
+    ];
+
+    /** How this section counts its contents, e.g. "29 stories". */
+    public static function countLabel(string $section, int $n): string
+    {
+        return $n.' '.Str::plural(self::UNITS[$section] ?? 'item', $n);
+    }
 
     /** @var array<string, array<string, mixed>>|null */
     private ?array $index = null;

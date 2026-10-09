@@ -122,3 +122,36 @@ it('keeps a style block the file carries and drops the document wrapper', functi
 it('copes with a file that is a fragment rather than a document', function () {
     expect(HtmlDocument::readable('<p>Just a paragraph</p>'))->toBe('<p>Just a paragraph</p>');
 });
+
+/*
+ | The hub and the section pages used to count everything in "pages" — "29
+ | pages" under Personal Stories, First Edition, which is not what a member
+ | looking for Dr. Bob's Nightmare is counting. Each section now counts the
+ | thing it actually holds.
+ */
+it('counts each section in its own units', function () {
+    $hub = $this->get('/aa-literature')->assertOk()->getContent();
+
+    expect($hub)
+        ->toContain('29 stories')
+        ->toContain('40 stories')
+        ->toContain('11 prayers')
+        ->toContain('8 readings')
+        ->not->toContain('pages');
+
+    foreach (['stories-edition-1' => 'stories', 'prayers' => 'prayers', 'readings' => 'readings'] as $slug => $unit) {
+        expect($this->get('/aa-literature/'.$slug)->getContent())->toContain($unit);
+    }
+});
+
+/*
+ | The Big Book section holds the eleven chapters along with the preface, the
+ | two forewords, the Doctor's Opinion and two stories, so it must not claim
+ | seventeen chapters.
+ */
+it('does not call the whole Big Book section chapters', function () {
+    $html = $this->get('/aa-literature')->getContent();
+
+    expect($html)->toContain('17 parts')
+        ->not->toContain('17 chapters');
+});

@@ -14,7 +14,7 @@
         @foreach($sections as $slug => $heading)
             <a href="/aa-literature/{{ $slug }}">
                 {{ $heading }}
-                <span class="count">{{ $counts[$slug] }} {{ \Illuminate\Support\Str::plural('page', $counts[$slug]) }}</span>
+                <span class="count">{{ \App\Services\Site\LiteratureLibrary::countLabel($slug, $counts[$slug]) }}</span>
             </a>
         @endforeach
     </div>

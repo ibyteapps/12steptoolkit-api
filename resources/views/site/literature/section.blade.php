@@ -5,7 +5,7 @@
     :schema="$schema"
 >
     <h1>{{ $heading }}</h1>
-    <p class="lede">{{ $documents->count() }} {{ \Illuminate\Support\Str::plural('page', $documents->count()) }}.</p>
+    <p class="lede">{{ \App\Services\Site\LiteratureLibrary::countLabel($section, $documents->count()) }}.</p>
 
     <ul class="index">
         @foreach($documents as $document)
