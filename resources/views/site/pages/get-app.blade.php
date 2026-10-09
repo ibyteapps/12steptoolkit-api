@@ -32,12 +32,10 @@
 
     <div class="badges">
         <a href="{{ $identity['appStore'] }}" rel="noopener">
-    <img class="b-light" src="/images/store_badges/appstore.webp" alt="Download on the App Store" width="155" height="46">
-            <img class="b-dark" src="/images/store_badges/appstore-tra-white.webp" alt="Download on the App Store" width="155" height="46">
+    <img src="/images/store_badges/appstore.webp" alt="Download on the App Store" width="155" height="46">
         </a>
         <a href="{{ $identity['playStore'] }}" rel="noopener">
-    <img class="b-light" src="/images/store_badges/googleplay.webp" alt="Get it on Google Play" width="162" height="46">
-            <img class="b-dark" src="/images/store_badges/googleplay-tra-white.webp" alt="Get it on Google Play" width="162" height="46">
+    <img src="/images/store_badges/googleplay.webp" alt="Get it on Google Play" width="162" height="46">
         </a>
     </div>
 

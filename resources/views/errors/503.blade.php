@@ -18,21 +18,16 @@
     <meta name="robots" content="noindex">
     <title>Back in a minute — 12 Step Toolkit</title>
     <style>
-        :root { color-scheme: light dark; }
+        :root { color-scheme: light; }
         body {
             margin: 0; min-height: 100vh; display: grid; place-items: center;
             font: 16px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-            background: #f7f7f5; color: #1c1c1a; padding: 24px;
+            background: #eef4fb; color: #141a21; padding: 24px;
         }
         main { max-width: 32rem; text-align: center; }
         h1 { font-size: 1.5rem; font-weight: 600; margin: 0 0 .75rem; }
-        p { margin: 0 0 .75rem; color: #5a5a54; }
-        .quiet { font-size: .875rem; color: #8a8a82; }
-        @media (prefers-color-scheme: dark) {
-            body { background: #16161a; color: #f2f2f0; }
-            p { color: #a8a8a2; }
-            .quiet { color: #76766f; }
-        }
+        p { margin: 0 0 .75rem; color: #50606f; }
+        .quiet { font-size: .875rem; color: #7b8794; }
     </style>
 </head>
 <body>

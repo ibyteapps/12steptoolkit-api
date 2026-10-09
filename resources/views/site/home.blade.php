@@ -117,7 +117,6 @@
         width: 42px; height: 42px; border-radius: 12px; display: grid; place-items: center;
         background: var(--accent-soft); color: var(--brand-blue); margin-bottom: 16px;
     }
-    @media (prefers-color-scheme: dark) { .feature .ico { color: var(--accent); } }
     .feature .ico svg { width: 21px; height: 21px; }
     .feature h3 { font-size: 1.0625rem; margin: 0 0 7px; }
     .feature p { margin: 0; color: var(--ink-soft); font-size: .9375rem; line-height: 1.6; }
@@ -226,12 +225,10 @@
 
                 <div class="badges">
                     <a href="{{ $identity['appStore'] }}" rel="noopener">
-                        <img class="b-light" src="/images/store_badges/appstore.webp" alt="Download on the App Store" width="155" height="46">
-                        <img class="b-dark" src="/images/store_badges/appstore-tra-white.webp" alt="Download on the App Store" width="155" height="46">
+                        <img src="/images/store_badges/appstore.webp" alt="Download on the App Store" width="155" height="46">
                     </a>
                     <a href="{{ $identity['playStore'] }}" rel="noopener">
-                        <img class="b-light" src="/images/store_badges/googleplay.webp" alt="Get it on Google Play" width="162" height="46">
-                        <img class="b-dark" src="/images/store_badges/googleplay-tra-white.webp" alt="Get it on Google Play" width="162" height="46">
+                        <img src="/images/store_badges/googleplay.webp" alt="Get it on Google Play" width="162" height="46">
                     </a>
                 </div>
 

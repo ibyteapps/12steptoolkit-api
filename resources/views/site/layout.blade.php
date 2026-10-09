@@ -36,8 +36,7 @@
     <meta property="og:image" content="{{ url($image ?? '/images/screens/Screen1@2x.webp') }}">
     <meta name="twitter:card" content="summary_large_image">
 
-    <meta name="theme-color" content="#2c3e50" media="(prefers-color-scheme: light)">
-    <meta name="theme-color" content="#0e1218" media="(prefers-color-scheme: dark)">
+    <meta name="theme-color" content="#eef4fb">
 
     <link rel="icon" href="/favicon.ico" sizes="any">
     <link rel="icon" href="/favicon.png" type="image/png">
@@ -52,7 +51,7 @@
     <style>
         /* ---- Tokens -------------------------------------------------- */
         :root {
-            color-scheme: light dark;
+            color-scheme: light;
 
             /* Brand, carried over from the production stylesheet. */
             --brand-deep: #2c3e50;
@@ -95,26 +94,6 @@
             --shell: 72rem;
 
             --ease: cubic-bezier(.4, 0, .2, 1);
-        }
-
-        @media (prefers-color-scheme: dark) {
-            :root {
-                --accent: #5ab8ef;
-                --accent-soft: #15283a;
-                --ink: #e9edf2;
-                --ink-soft: #a7b4c2;
-                --ink-faint: #7d8b9a;
-                --page: #0e1218;
-                --page-alt: #141a22;
-                --card: #171e27;
-                --rule: #28313d;
-                --rule-soft: #212935;
-                --shadow-sm: 0 1px 2px rgb(0 0 0 / .4);
-                --shadow-md: 0 4px 10px -2px rgb(0 0 0 / .45), 0 12px 28px -8px rgb(0 0 0 / .5);
-                --shadow-lg: 0 8px 20px -6px rgb(0 0 0 / .5), 0 30px 60px -20px rgb(0 0 0 / .65);
-                --wash: linear-gradient(145deg, #121922 0%, #161826 52%, #1c1826 100%);
-                --tint: #141b24;
-            }
         }
 
         /* ---- Base ---------------------------------------------------- */
@@ -304,14 +283,6 @@
         .badges a { display: block; line-height: 0; border-radius: 9px; transition: transform .2s var(--ease); }
         .badges a:hover { transform: translateY(-2px); }
         .badges img { height: 46px; width: auto; display: block; }
-        /* The store badges ship in two finishes. A badge on a light surface
-           takes the dark one and swaps to the outlined one in dark mode;
-           a badge on the brand gradient is always the outlined one. */
-        .badges .b-dark { display: none; }
-        @media (prefers-color-scheme: dark) {
-            .badges .b-light { display: none; }
-            .badges .b-dark { display: block; }
-        }
 
         .rating { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; font-size: .9375rem; color: var(--ink-soft); }
         .rating .stars { color: var(--star); letter-spacing: .08em; font-size: 1rem; }
