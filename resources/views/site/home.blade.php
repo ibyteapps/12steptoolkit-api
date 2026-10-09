@@ -25,6 +25,7 @@
 <style>
     .band { padding: clamp(56px, 7vw, 96px) 0; }
     .band-alt { background: var(--page-alt); }
+    .band-wash { background: var(--wash); }
     .band-brand { background: var(--grad); color: #fff; position: relative; overflow: hidden; }
     .band-brand::after {
         content: ''; position: absolute; inset: 0;
@@ -41,41 +42,41 @@
 
     /* ---- Hero ---------------------------------------------------- */
     .hero {
-        background: var(--grad); color: #fff;
+        background: var(--wash); color: var(--ink);
         position: relative; overflow: hidden;
         padding: clamp(48px, 6vw, 84px) 0 clamp(56px, 7vw, 96px);
+        border-bottom: 1px solid var(--rule-soft);
     }
+    /* A soft bloom behind the phones rather than a dark overlay. */
     .hero::after {
-        content: ''; position: absolute; inset: 0;
-        background: radial-gradient(64% 120% at 12% 0%, rgb(255 255 255 / .2), transparent 58%);
-        pointer-events: none;
+        content: ''; position: absolute; inset: 0; pointer-events: none;
+        background: radial-gradient(44% 70% at 78% 38%, rgb(41 128 185 / .16), transparent 68%);
     }
     .hero .wrap { position: relative; }
     .hero .cols {
         display: grid; gap: clamp(32px, 5vw, 64px);
         grid-template-columns: minmax(0, 1.05fr) minmax(0, .95fr); align-items: center;
     }
-    .hero .eyebrow { color: rgb(255 255 255 / .72); }
+    .hero .eyebrow { color: var(--accent); }
     .hero h1 {
         font-size: clamp(2.125rem, 1.2rem + 3.4vw, 3.5rem);
-        line-height: 1.06; letter-spacing: -.03em; margin: 0 0 20px; color: #fff; max-width: 15ch;
+        line-height: 1.06; letter-spacing: -.03em; margin: 0 0 20px; color: var(--ink); max-width: 15ch;
     }
-    .hero .sub { font-size: clamp(1.0625rem, 1rem + .4vw, 1.25rem); line-height: 1.6; color: rgb(255 255 255 / .84); max-width: 46ch; margin: 0 0 30px; }
+    .hero .sub { font-size: clamp(1.0625rem, 1rem + .4vw, 1.25rem); line-height: 1.6; color: var(--ink-soft); max-width: 46ch; margin: 0 0 30px; }
     .hero .badges { margin: 0 0 20px; }
-    .hero .rating { color: rgb(255 255 255 / .8); }
-    .hero .rating b { color: #fff; }
     .hero .web {
-        display: inline-block; margin-top: 18px; color: #fff; font-size: .9375rem;
-        border-bottom: 1px solid rgb(255 255 255 / .4); text-decoration: none; padding-bottom: 2px;
+        display: inline-block; margin-top: 18px; color: var(--accent); font-size: .9375rem;
+        font-weight: 500; text-decoration: none;
+        border-bottom: 1px solid color-mix(in srgb, var(--accent) 40%, transparent); padding-bottom: 2px;
     }
-    .hero .web:hover { border-color: #fff; }
+    .hero .web:hover { border-color: var(--accent); }
 
     /* Two phones, the rear one angled behind — the production site's
        signature, drawn with transforms rather than baked into a JPEG. */
     .phones { position: relative; display: flex; justify-content: center; align-items: center; min-height: 420px; }
     .phones img {
         display: block; border-radius: 30px; background: #000;
-        box-shadow: 0 30px 70px -20px rgb(0 0 0 / .55), 0 0 0 1px rgb(255 255 255 / .1);
+        box-shadow: 0 30px 70px -22px rgb(20 34 56 / .38), 0 0 0 1px rgb(20 34 56 / .08);
     }
     .phones .back {
         position: absolute; width: 46%; max-width: 240px; right: 6%; top: 2%;
@@ -154,7 +155,7 @@
     .screens img {
         flex: 0 0 auto; width: 190px; border-radius: 22px; background: #000;
         scroll-snap-align: start;
-        box-shadow: 0 20px 44px -18px rgb(0 0 0 / .5), 0 0 0 1px rgb(255 255 255 / .12);
+        box-shadow: 0 18px 38px -16px rgb(20 34 56 / .35), 0 0 0 1px rgb(20 34 56 / .08);
     }
 
     /* ---- Pricing ------------------------------------------------- */
@@ -225,10 +226,12 @@
 
                 <div class="badges">
                     <a href="{{ $identity['appStore'] }}" rel="noopener">
-                        <img src="/images/store_badges/appstore-tra-white.webp" alt="Download on the App Store" width="155" height="46">
+                        <img class="b-light" src="/images/store_badges/appstore.webp" alt="Download on the App Store" width="155" height="46">
+                        <img class="b-dark" src="/images/store_badges/appstore-tra-white.webp" alt="Download on the App Store" width="155" height="46">
                     </a>
                     <a href="{{ $identity['playStore'] }}" rel="noopener">
-                        <img src="/images/store_badges/googleplay-tra-white.webp" alt="Get it on Google Play" width="162" height="46">
+                        <img class="b-light" src="/images/store_badges/googleplay.webp" alt="Get it on Google Play" width="162" height="46">
+                        <img class="b-dark" src="/images/store_badges/googleplay-tra-white.webp" alt="Get it on Google Play" width="162" height="46">
                     </a>
                 </div>
 
@@ -374,7 +377,7 @@
 </section>
 
 {{-- ---- Screens strip --------------------------------------------- --}}
-<section class="band band-brand">
+<section class="band band-wash">
     <div class="wrap">
         <div class="section-head">
             <h2>What it looks like</h2>

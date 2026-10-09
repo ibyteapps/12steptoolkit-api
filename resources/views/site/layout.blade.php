@@ -62,7 +62,14 @@
             --accent-soft: #e8f3fb;
             --star: #e8a317;
 
-            --grad: linear-gradient(135deg, #22303f 0%, #2c3e50 22%, #2980b9 62%, #a765ad 100%);
+            /* The loud one — used for the call to action, the brand tile and
+               the statistics figures, and nowhere else. */
+            --grad: linear-gradient(135deg, #2980b9 0%, #5f73c4 52%, #ab67b2 100%);
+            /* The quiet one — the hero and the tinted bands. Recovery is not
+               a nightclub: the reference set (Headspace, Calm, Hims) runs
+               light with dark ink and saves saturation for one block. */
+            --wash: linear-gradient(145deg, #eef4fb 0%, #f3f1fa 52%, #faf3f7 100%);
+            --tint: #f1f5fa;
 
             --ink: #141a21;
             --ink-soft: #50606f;
@@ -105,6 +112,8 @@
                 --shadow-sm: 0 1px 2px rgb(0 0 0 / .4);
                 --shadow-md: 0 4px 10px -2px rgb(0 0 0 / .45), 0 12px 28px -8px rgb(0 0 0 / .5);
                 --shadow-lg: 0 8px 20px -6px rgb(0 0 0 / .5), 0 30px 60px -20px rgb(0 0 0 / .65);
+                --wash: linear-gradient(145deg, #121922 0%, #161826 52%, #1c1826 100%);
+                --tint: #141b24;
             }
         }
 
@@ -180,6 +189,7 @@
         header.site nav a:hover { color: var(--ink); background: var(--page-alt); }
         header.site nav a.cta {
             background: var(--brand-blue); color: #fff; margin-left: 6px;
+            border-radius: var(--r-pill); padding: 9px 18px;
             box-shadow: var(--shadow-sm);
         }
         header.site nav a.cta:hover { background: #2470a3; color: #fff; }
@@ -294,6 +304,14 @@
         .badges a { display: block; line-height: 0; border-radius: 9px; transition: transform .2s var(--ease); }
         .badges a:hover { transform: translateY(-2px); }
         .badges img { height: 46px; width: auto; display: block; }
+        /* The store badges ship in two finishes. A badge on a light surface
+           takes the dark one and swaps to the outlined one in dark mode;
+           a badge on the brand gradient is always the outlined one. */
+        .badges .b-dark { display: none; }
+        @media (prefers-color-scheme: dark) {
+            .badges .b-light { display: none; }
+            .badges .b-dark { display: block; }
+        }
 
         .rating { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; font-size: .9375rem; color: var(--ink-soft); }
         .rating .stars { color: var(--star); letter-spacing: .08em; font-size: 1rem; }
