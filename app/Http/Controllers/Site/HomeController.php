@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Site;
 
+use App\Services\Site\BlogLibrary;
 use App\Services\Site\Schema;
 use Illuminate\Contracts\View\View;
 
@@ -30,7 +31,10 @@ use Illuminate\Contracts\View\View;
  */
 class HomeController extends Controller
 {
-    public function __construct(private readonly Schema $schema) {}
+    public function __construct(
+        private readonly Schema $schema,
+        private readonly BlogLibrary $blog,
+    ) {}
 
     public function __invoke(): View
     {
@@ -40,6 +44,10 @@ class HomeController extends Controller
             'faqs' => $faqs,
             'rating' => Schema::combinedRating(),
             'identity' => config('site.identity'),
+            // Three most recent posts. The static site never linked the blog
+            // from the home page, which left 52 articles two clicks from the
+            // only page that gets linked to.
+            'latest' => $this->blog->posts()->take(3),
             // The app node and the FAQ node: the two that earn a rich result
             // on this page. Both describe things rendered below.
             'schema' => [$this->schema->app(), $this->schema->faqs($faqs)],

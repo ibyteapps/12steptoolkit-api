@@ -33,10 +33,24 @@ class BlogController extends Controller
             throw new NotFoundHttpException;
         }
 
+        // Three more to read: same category first, topped up with the most
+        // recent of anything else. The production site carried a related-posts
+        // rail under every article and the first Laravel cut dropped it, which
+        // left 52 articles with one outbound link each.
+        $others = $this->blog->posts()->reject(fn (array $p): bool => $p['slug'] === $slug);
+        $related = $others
+            ->filter(fn (array $p): bool => $p['category'] === $post['category'])
+            ->take(3)
+            ->concat($others->filter(fn (array $p): bool => $p['category'] !== $post['category']))
+            ->unique('slug')
+            ->take(3)
+            ->values();
+
         return view('site.blog.show', [
             'post' => $post,
             'body' => $this->blog->render($slug),
             'neighbours' => $this->blog->neighbours($slug),
+            'related' => $related,
             'schema' => [$this->schema->article($post)],
         ]);
     }

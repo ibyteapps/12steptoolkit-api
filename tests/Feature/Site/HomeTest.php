@@ -3,6 +3,17 @@
 use App\Services\Site\Schema;
 
 /**
+ * The page's rendered text, with the tags, the <style> block and the runs of
+ * whitespace between elements taken out — what someone actually reads.
+ */
+function visibleText(string $html): string
+{
+    $html = preg_replace('#<(script|style)\b[^>]*>.*?</\1>#si', ' ', $html);
+
+    return trim((string) preg_replace('/\s+/', ' ', html_entity_decode(strip_tags((string) $html))));
+}
+
+/**
  * The home page — the one page in the port that was rebuilt rather than
  * converted, which is exactly why it needs tests the others do not.
  *
@@ -37,9 +48,14 @@ it('shows the rating it marks up', function () {
     $rating = Schema::combinedRating();
     $html = $this->get('/')->assertOk()->getContent();
 
-    expect($html)
-        ->toContain('<strong>'.$rating['value'].'</strong>')
-        ->toContain(number_format($rating['count']).' ratings');
+    // Asserted against the text a visitor reads rather than the tags it is
+    // wrapped in, because the rule being checked is about what is on the
+    // screen — a restyle that moves the figure from <strong> to <b> must not
+    // read as a regression, and one that deletes it must.
+    $visible = visibleText($html);
+
+    expect($visible)
+        ->toContain(number_format($rating['value'], 1).' from '.number_format($rating['count']).' ratings');
 
     preg_match('#<script type="application/ld\+json">(.*?)</script>#s', $html, $m);
     $graph = json_decode($m[1], true)['@graph'];
@@ -53,7 +69,7 @@ it('names each store with its own rating, to one decimal place', function () {
     $html = $this->get('/')->getContent();
 
     foreach (Schema::combinedRating()['stores'] as $store) {
-        expect($html)->toContain(number_format($store['value'], 1).' '.$store['name']);
+        expect(visibleText($html))->toContain(number_format($store['value'], 1).' '.$store['name']);
     }
 
     // 4.523 is a weighted average, not how a store rating is written.

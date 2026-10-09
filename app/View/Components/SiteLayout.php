@@ -33,6 +33,9 @@ class SiteLayout extends Component
         public ?array $crumbs = null,
         public string $ogType = 'website',
         public ?array $schema = null,
+        public ?string $image = null,
+        public bool $hideCta = false,
+        public bool $bare = false,
     ) {}
 
     /** The whole `@graph` for this page, encoded, or null if there is none. */

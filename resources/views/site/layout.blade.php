@@ -1,9 +1,16 @@
 {{--
     The public website's layout.
 
-    Self-contained on purpose: no build step, no Node, no external stylesheet.
-    The CSS is here, in one place, which is also what makes the eventual
-    restyle a change to one file rather than to 105 pages.
+    Self-contained on purpose: no build step, no Node, no external stylesheet
+    and no webfont. The CSS is here, in one place, which is also what makes a
+    restyle a change to one file rather than to 169 pages.
+
+    The design tokens are the ones the production site shipped — the navy →
+    blue → violet brand gradient, the #16a2e0 accent, the gold star — carried
+    over rather than reinvented, so the site still looks like itself. What has
+    changed is the execution: a fluid type scale, a real dark mode, layered
+    shadows, a sticky translucent header and a store call-to-action that every
+    page gets whether or not its author remembered it.
 
     The `<head>` is the part that must not drift. Every title, description and
     keyword list comes from `resources/site/literature.php`, which was
@@ -25,8 +32,15 @@
     <meta property="og:title" content="{{ $title }}">
     @isset($description)<meta property="og:description" content="{{ $description }}">@endisset
     <meta property="og:url" content="{{ url()->current() }}">
+    <meta property="og:site_name" content="12 Step Toolkit">
+    <meta property="og:image" content="{{ url($image ?? '/images/screens/Screen1@2x.webp') }}">
+    <meta name="twitter:card" content="summary_large_image">
+
+    <meta name="theme-color" content="#2c3e50" media="(prefers-color-scheme: light)">
+    <meta name="theme-color" content="#0e1218" media="(prefers-color-scheme: dark)">
 
     <link rel="icon" href="/favicon.ico" sizes="any">
+    <link rel="icon" href="/favicon.png" type="image/png">
 
     {{-- One connected @graph per page: the organisation and the site, the
          breadcrumb trail as rendered, and whatever this page is. Assembled by
@@ -36,133 +50,306 @@
     @endif
 
     <style>
+        /* ---- Tokens -------------------------------------------------- */
         :root {
             color-scheme: light dark;
-            --ink: #1b1b19;
-            --ink-soft: #55554e;
-            --ink-faint: #8a8a81;
-            --page: #fbfaf7;
+
+            /* Brand, carried over from the production stylesheet. */
+            --brand-deep: #2c3e50;
+            --brand-blue: #2980b9;
+            --brand-violet: #b06ab3;
+            --accent: #1583c4;
+            --accent-soft: #e8f3fb;
+            --star: #e8a317;
+
+            --grad: linear-gradient(135deg, #22303f 0%, #2c3e50 22%, #2980b9 62%, #a765ad 100%);
+
+            --ink: #141a21;
+            --ink-soft: #50606f;
+            --ink-faint: #7b8794;
+            --ink-on-brand: #ffffff;
+
+            --page: #ffffff;
+            --page-alt: #f5f8fb;
             --card: #ffffff;
-            --rule: #e5e3dc;
-            --link: #bf0210;
-            --measure: 38rem;
+            --rule: #e4e9ef;
+            --rule-soft: #eef2f6;
+
+            --shadow-sm: 0 1px 2px rgb(16 28 42 / .06), 0 1px 1px rgb(16 28 42 / .04);
+            --shadow-md: 0 4px 10px -2px rgb(16 28 42 / .08), 0 12px 28px -8px rgb(16 28 42 / .10);
+            --shadow-lg: 0 8px 20px -6px rgb(16 28 42 / .12), 0 30px 60px -20px rgb(16 28 42 / .20);
+
+            --r-sm: 8px;
+            --r-md: 14px;
+            --r-lg: 20px;
+            --r-pill: 999px;
+
+            --measure: 44rem;
+            --shell: 72rem;
+
+            --ease: cubic-bezier(.4, 0, .2, 1);
         }
+
         @media (prefers-color-scheme: dark) {
             :root {
-                --ink: #f0efea; --ink-soft: #b0afa7; --ink-faint: #7c7b73;
-                --page: #15151a; --card: #1c1c22; --rule: #2e2e36; --link: #ff8a84;
+                --accent: #5ab8ef;
+                --accent-soft: #15283a;
+                --ink: #e9edf2;
+                --ink-soft: #a7b4c2;
+                --ink-faint: #7d8b9a;
+                --page: #0e1218;
+                --page-alt: #141a22;
+                --card: #171e27;
+                --rule: #28313d;
+                --rule-soft: #212935;
+                --shadow-sm: 0 1px 2px rgb(0 0 0 / .4);
+                --shadow-md: 0 4px 10px -2px rgb(0 0 0 / .45), 0 12px 28px -8px rgb(0 0 0 / .5);
+                --shadow-lg: 0 8px 20px -6px rgb(0 0 0 / .5), 0 30px 60px -20px rgb(0 0 0 / .65);
             }
         }
-        * { box-sizing: border-box; }
+
+        /* ---- Base ---------------------------------------------------- */
+        *, *::before, *::after { box-sizing: border-box; }
+
+        html { -webkit-text-size-adjust: 100%; scroll-behavior: smooth; }
+        @media (prefers-reduced-motion: reduce) {
+            html { scroll-behavior: auto; }
+            * { animation-duration: .01ms !important; transition-duration: .01ms !important; }
+        }
+
         body {
             margin: 0;
             background: var(--page);
             color: var(--ink);
-            font: 17px/1.65 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-            -webkit-text-size-adjust: 100%;
-        }
-        a { color: var(--link); }
-        .wrap { max-width: 64rem; margin: 0 auto; padding: 0 16px; }
-
-        header.site {
-            border-bottom: 1px solid var(--rule);
-            background: var(--card);
-        }
-        header.site .wrap { display: flex; align-items: center; gap: 20px; min-height: 60px; flex-wrap: wrap; }
-        header.site strong { font-size: 1.0625rem; letter-spacing: -0.01em; }
-        header.site a { color: var(--ink); text-decoration: none; }
-        header.site nav { margin-left: auto; display: flex; gap: 18px; font-size: 0.9375rem; }
-        header.site nav a { color: var(--ink-soft); }
-        header.site nav a:hover { color: var(--link); }
-
-        main { padding: 36px 0 64px; }
-        nav.crumbs { font-size: 0.875rem; color: var(--ink-faint); margin-bottom: 22px; }
-        nav.crumbs a { color: var(--ink-soft); text-decoration: none; }
-        nav.crumbs a:hover { text-decoration: underline; }
-        nav.crumbs span { margin: 0 7px; opacity: 0.5; }
-
-        h1 { font-size: 1.75rem; line-height: 1.25; letter-spacing: -0.02em; margin: 0 0 10px; }
-        .lede { color: var(--ink-soft); margin: 0 0 32px; max-width: var(--measure); }
-
-        /* The reading column. The literature files bring their own markup and
-           their own <style>; this only sets the measure and the rhythm. */
-        article.reading {
-            max-width: var(--measure);
-            font-family: Georgia, "Iowan Old Style", "Palatino Linotype", serif;
+            font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
             font-size: 1.0625rem;
-            line-height: 1.75;
+            line-height: 1.65;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        a { color: var(--accent); text-underline-offset: 3px; }
+
+        img { max-width: 100%; height: auto; }
+
+        h1, h2, h3, h4 { line-height: 1.15; letter-spacing: -0.021em; margin: 0 0 .5em; font-weight: 700; }
+        h1 { font-size: clamp(2rem, 1.4rem + 2.4vw, 3rem); }
+        h2 { font-size: clamp(1.5rem, 1.2rem + 1.3vw, 2.125rem); }
+        h3 { font-size: clamp(1.1875rem, 1.1rem + .5vw, 1.4375rem); }
+
+        :where(a, button, summary, [tabindex]):focus-visible {
+            outline: 2px solid var(--accent);
+            outline-offset: 3px;
+            border-radius: 4px;
+        }
+
+        .shell { max-width: var(--shell); margin: 0 auto; padding: 0 20px; }
+        .wrap  { max-width: var(--shell); margin: 0 auto; padding: 0 20px; }
+
+        .skip {
+            position: absolute; left: -9999px; top: 0; z-index: 100;
+            background: var(--card); color: var(--ink); padding: 10px 16px;
+            border-radius: 0 0 var(--r-sm) 0;
+        }
+        .skip:focus { left: 0; }
+
+        /* ---- Header -------------------------------------------------- */
+        header.site {
+            position: sticky; top: 0; z-index: 50;
+            background: color-mix(in srgb, var(--page) 86%, transparent);
+            backdrop-filter: saturate(180%) blur(14px);
+            -webkit-backdrop-filter: saturate(180%) blur(14px);
+            border-bottom: 1px solid var(--rule-soft);
+        }
+        header.site .wrap { display: flex; align-items: center; gap: 24px; min-height: 66px; }
+
+        .brand { display: inline-flex; align-items: center; gap: 11px; text-decoration: none; color: var(--ink); }
+        .brand .mark {
+            width: 34px; height: 34px; border-radius: 10px; flex: 0 0 auto;
+            background: var(--grad); display: grid; place-items: center;
+            box-shadow: var(--shadow-sm);
+        }
+        .brand .mark img { width: 21px; height: 21px; display: block; }
+        .brand b { font-size: 1.0625rem; font-weight: 700; letter-spacing: -0.02em; white-space: nowrap; }
+
+        header.site nav { margin-left: auto; display: flex; align-items: center; gap: 4px; }
+        header.site nav a {
+            color: var(--ink-soft); text-decoration: none; font-size: .9375rem; font-weight: 500;
+            padding: 8px 12px; border-radius: var(--r-sm); white-space: nowrap;
+            transition: color .2s var(--ease), background .2s var(--ease);
+        }
+        header.site nav a:hover { color: var(--ink); background: var(--page-alt); }
+        header.site nav a.cta {
+            background: var(--brand-blue); color: #fff; margin-left: 6px;
+            box-shadow: var(--shadow-sm);
+        }
+        header.site nav a.cta:hover { background: #2470a3; color: #fff; }
+        @media (max-width: 640px) {
+            header.site .wrap { gap: 8px; }
+            header.site nav { gap: 0; }
+            header.site nav a { padding: 8px 10px; font-size: .875rem; }
+            header.site nav a.lit { display: none; }
+            .brand { gap: 9px; }
+            .brand b { font-size: .9375rem; }
+            .brand .mark { width: 30px; height: 30px; border-radius: 9px; }
+            .brand .mark img { width: 18px; height: 18px; }
+        }
+        @media (max-width: 380px) { .brand b { display: none; } }
+
+        /* ---- Page furniture ------------------------------------------ */
+        main { display: block; }
+        .page { padding: 40px 0 72px; }
+
+        nav.crumbs { font-size: .875rem; color: var(--ink-faint); margin: 0 0 24px; }
+        nav.crumbs a { color: var(--ink-soft); text-decoration: none; }
+        nav.crumbs a:hover { color: var(--accent); text-decoration: underline; }
+        nav.crumbs span { margin: 0 8px; opacity: .45; }
+
+        .eyebrow {
+            font-size: .75rem; font-weight: 700; text-transform: uppercase;
+            letter-spacing: .09em; color: var(--accent); margin: 0 0 14px;
+        }
+
+        .lede { font-size: 1.1875rem; line-height: 1.6; color: var(--ink-soft); margin: 0 0 32px; max-width: 46rem; }
+
+        p.meta { color: var(--ink-faint); font-size: .875rem; margin: 0 0 28px; }
+        p.meta time { white-space: nowrap; }
+
+        /* ---- Reading columns ----------------------------------------- */
+        /* The literature files bring their own markup and their own <style>;
+           this sets the measure, the rhythm and nothing else. */
+        article.reading {
+            max-width: var(--measure); margin: 0 auto;
+            font-family: Georgia, "Iowan Old Style", "Palatino Linotype", serif;
+            font-size: 1.125rem; line-height: 1.8; color: var(--ink);
         }
         article.reading p { margin: 0 0 1.15em; }
-        article.reading hr { border: 0; border-top: 1px solid var(--rule); margin: 2em 0; }
-        article.reading img { max-width: 100%; height: auto; }
+        article.reading hr { border: 0; border-top: 1px solid var(--rule); margin: 2.4em 0; }
         article.reading strong { font-weight: 600; }
-        /* The page numbers the scans carry, set small and quiet rather than
-           as body text. */
         article.reading p[align="center"] { text-align: center; }
 
-        ul.index { list-style: none; margin: 0; padding: 0; max-width: var(--measure); }
-        ul.index li { border-bottom: 1px solid var(--rule); }
-        ul.index li:first-child { border-top: 1px solid var(--rule); }
-        ul.index a {
-            display: block; padding: 13px 2px; text-decoration: none; color: var(--ink);
-        }
-        ul.index a:hover { color: var(--link); }
-        ul.index .sub { display: block; font-size: 0.875rem; color: var(--ink-faint); margin-top: 2px; }
-
-        .cards { display: grid; gap: 14px; grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr)); }
-        .cards a {
-            display: block; padding: 18px; border: 1px solid var(--rule); border-radius: 10px;
-            background: var(--card); text-decoration: none; color: var(--ink);
-        }
-        .cards a:hover { border-color: var(--link); }
-        .cards .count { display: block; font-size: 0.8125rem; color: var(--ink-faint); margin-top: 4px; }
-
-        p.meta { color: var(--ink-faint); font-size: 0.875rem; margin: -4px 0 28px; }
-
-        /* The blog's own prose, which this application renders from Markdown
-           rather than injecting as scanned HTML — so it can be styled. */
-        article.prose { max-width: var(--measure); }
-        article.prose h2 { font-size: 1.3125rem; line-height: 1.3; margin: 1.9em 0 0.5em; letter-spacing: -0.01em; }
-        article.prose h3 { font-size: 1.0625rem; margin: 1.6em 0 0.4em; }
-        article.prose ul, article.prose ol { padding-left: 1.3em; margin: 0 0 1.15em; }
-        article.prose li { margin-bottom: 0.4em; }
+        article.prose { max-width: var(--measure); margin: 0 auto; font-size: 1.0625rem; line-height: 1.8; }
+        article.prose h2 { font-size: clamp(1.3125rem, 1.2rem + .6vw, 1.625rem); margin: 2em 0 .55em; }
+        article.prose h3 { font-size: 1.125rem; margin: 1.7em 0 .45em; }
+        article.prose p { margin: 0 0 1.25em; }
+        article.prose ul, article.prose ol { padding-left: 1.35em; margin: 0 0 1.25em; }
+        article.prose li { margin-bottom: .5em; }
+        article.prose a { font-weight: 500; }
         article.prose blockquote {
-            margin: 1.5em 0; padding: 2px 0 2px 18px;
-            border-left: 3px solid var(--rule); color: var(--ink-soft); font-style: italic;
+            margin: 1.8em 0; padding: 18px 22px;
+            background: var(--page-alt); border-left: 3px solid var(--brand-blue);
+            border-radius: 0 var(--r-md) var(--r-md) 0; color: var(--ink-soft);
         }
-        article.prose table { border-collapse: collapse; width: 100%; margin: 1.5em 0; font-size: 0.9375rem; }
-        article.prose th, article.prose td { border: 1px solid var(--rule); padding: 8px 10px; text-align: left; }
-        article.prose th { background: var(--card); font-weight: 600; }
+        article.prose blockquote p:last-child { margin-bottom: 0; }
+        article.prose img { border-radius: var(--r-md); display: block; margin: 2em 0; }
+        article.prose table { border-collapse: collapse; width: 100%; margin: 1.8em 0; font-size: .9375rem; }
+        article.prose th, article.prose td { border: 1px solid var(--rule); padding: 10px 12px; text-align: left; }
+        article.prose th { background: var(--page-alt); font-weight: 600; }
         article.prose code {
-            font-size: 0.9em; background: var(--card); border: 1px solid var(--rule);
-            border-radius: 4px; padding: 1px 5px;
+            font-size: .9em; background: var(--page-alt); border: 1px solid var(--rule);
+            border-radius: 5px; padding: 1px 6px;
         }
+        article.prose hr { border: 0; border-top: 1px solid var(--rule); margin: 2.4em 0; }
 
+        /* ---- Index lists & cards -------------------------------------- */
+        ul.index { list-style: none; margin: 0 auto; padding: 0; max-width: var(--measure); }
+        ul.index li + li { border-top: 1px solid var(--rule-soft); }
+        ul.index a {
+            display: block; padding: 15px 14px; margin: 0 -14px; text-decoration: none; color: var(--ink);
+            border-radius: var(--r-sm); transition: background .18s var(--ease);
+            font-weight: 500;
+        }
+        ul.index a:hover { background: var(--page-alt); color: var(--accent); }
+        ul.index .sub { display: block; font-size: .875rem; color: var(--ink-faint); margin-top: 3px; font-weight: 400; }
+
+        .cards { display: grid; gap: 18px; grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr)); }
+        .cards > a {
+            display: block; padding: 22px; border: 1px solid var(--rule); border-radius: var(--r-lg);
+            background: var(--card); text-decoration: none; color: var(--ink);
+            box-shadow: var(--shadow-sm);
+            transition: transform .2s var(--ease), box-shadow .2s var(--ease), border-color .2s var(--ease);
+        }
+        .cards > a:hover { transform: translateY(-2px); box-shadow: var(--shadow-md); border-color: color-mix(in srgb, var(--brand-blue) 40%, var(--rule)); }
+        .cards h3 { margin: 0 0 6px; font-size: 1.0625rem; }
+        .cards .count { display: block; font-size: .875rem; color: var(--ink-faint); }
+
+        /* ---- Next / previous ----------------------------------------- */
         nav.nextprev {
-            display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
-            margin-top: 44px; max-width: var(--measure);
+            display: grid; gap: 14px; grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
+            margin: 56px auto 0; max-width: var(--measure);
         }
         nav.nextprev a {
-            display: block; padding: 14px 16px; border: 1px solid var(--rule); border-radius: 10px;
-            background: var(--card); text-decoration: none; color: var(--ink); font-size: 0.9375rem;
+            display: block; padding: 16px 18px; border: 1px solid var(--rule); border-radius: var(--r-md);
+            background: var(--card); text-decoration: none; color: var(--ink); font-size: .9375rem;
+            font-weight: 500; box-shadow: var(--shadow-sm);
+            transition: border-color .2s var(--ease), box-shadow .2s var(--ease);
         }
-        nav.nextprev a:hover { border-color: var(--link); }
-        nav.nextprev span { display: block; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--ink-faint); margin-bottom: 3px; }
-
-        p.stores { display: flex; gap: 12px; flex-wrap: wrap; margin: 28px 0 0; }
-        p.stores a {
-            display: inline-block; padding: 10px 18px; border: 1px solid var(--rule);
-            border-radius: 8px; background: var(--card); text-decoration: none;
-            color: var(--ink); font-size: 0.9375rem;
+        nav.nextprev a:hover { border-color: var(--brand-blue); box-shadow: var(--shadow-md); }
+        nav.nextprev span {
+            display: block; font-size: .6875rem; text-transform: uppercase;
+            letter-spacing: .09em; color: var(--ink-faint); margin-bottom: 4px; font-weight: 700;
         }
-        p.stores a:hover { border-color: var(--link); }
 
+        /* ---- Store badges & rating ------------------------------------ */
+        .badges { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+        .badges a { display: block; line-height: 0; border-radius: 9px; transition: transform .2s var(--ease); }
+        .badges a:hover { transform: translateY(-2px); }
+        .badges img { height: 46px; width: auto; display: block; }
+
+        .rating { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; font-size: .9375rem; color: var(--ink-soft); }
+        .rating .stars { color: var(--star); letter-spacing: .08em; font-size: 1rem; }
+        .rating b { color: var(--ink); font-weight: 700; }
+
+        /* ---- The app call to action, on every page -------------------- */
+        .appcta {
+            max-width: var(--shell); margin: 72px auto 0;
+            background: var(--grad); color: var(--ink-on-brand);
+            border-radius: var(--r-lg); padding: 38px 36px;
+            display: grid; gap: 28px; align-items: center;
+            grid-template-columns: minmax(0, 1fr) auto;
+            box-shadow: var(--shadow-lg);
+            position: relative; overflow: hidden;
+        }
+        .appcta::after {
+            content: ''; position: absolute; inset: 0;
+            background: radial-gradient(60% 120% at 12% 0%, rgb(255 255 255 / .18), transparent 60%);
+            pointer-events: none;
+        }
+        .appcta > * { position: relative; }
+        .appcta h2 { margin: 0 0 8px; font-size: clamp(1.3125rem, 1.1rem + 1vw, 1.75rem); color: #fff; }
+        .appcta p { margin: 0; color: rgb(255 255 255 / .82); font-size: 1rem; max-width: 46ch; }
+        .appcta .rating { color: rgb(255 255 255 / .82); margin-top: 14px; }
+        .appcta .rating b { color: #fff; }
+        .appcta .badges img { height: 48px; }
+        @media (max-width: 760px) {
+            .appcta { grid-template-columns: 1fr; padding: 30px 24px; text-align: left; }
+        }
+
+        /* ---- Footer --------------------------------------------------- */
         footer.site {
-            border-top: 1px solid var(--rule); padding: 26px 0; margin-top: 40px;
-            font-size: 0.875rem; color: var(--ink-faint);
+            border-top: 1px solid var(--rule);
+            background: var(--page-alt); padding: 48px 0 32px;
         }
-        footer.site .wrap { display: flex; gap: 18px; flex-wrap: wrap; }
-        footer.site a { color: var(--ink-soft); text-decoration: none; }
+        footer.site .cols {
+            display: grid; gap: 32px; grid-template-columns: minmax(0, 1.4fr) repeat(3, minmax(0, 1fr));
+        }
+        @media (max-width: 820px) { footer.site .cols { grid-template-columns: 1fr 1fr; } }
+        @media (max-width: 460px) { footer.site .cols { grid-template-columns: 1fr; } }
+        footer.site h4 {
+            font-size: .75rem; text-transform: uppercase; letter-spacing: .09em;
+            color: var(--ink-faint); margin: 0 0 14px; font-weight: 700;
+        }
+        footer.site ul { list-style: none; margin: 0; padding: 0; }
+        footer.site li { margin-bottom: 9px; }
+        footer.site a { color: var(--ink-soft); text-decoration: none; font-size: .9375rem; }
+        footer.site a:hover { color: var(--accent); }
+        footer.site .blurb { color: var(--ink-faint); font-size: .9375rem; margin: 12px 0 0; max-width: 34ch; }
+        footer.site .legal {
+            margin-top: 36px; padding-top: 22px; border-top: 1px solid var(--rule);
+            display: flex; gap: 10px 20px; flex-wrap: wrap; align-items: center;
+            font-size: .875rem; color: var(--ink-faint);
+        }
+        footer.site .legal .sep { margin-left: auto; }
+        @media (max-width: 560px) { footer.site .legal .sep { margin-left: 0; } }
     </style>
 
     {{-- A page with layout of its own brings its CSS here rather than adding
@@ -170,38 +357,86 @@
     {{ $styles ?? '' }}
 </head>
 <body>
+    <a class="skip" href="#main">Skip to content</a>
+
     <header class="site">
         <div class="wrap">
-            <strong><a href="/">12 Step Toolkit</a></strong>
-            <nav>
-                <a href="/aa-literature">A.A. Literature</a>
+            <a class="brand" href="/">
+                <span class="mark" aria-hidden="true"><img src="/images/design-logo.webp" alt="" width="21" height="21"></span>
+                <b>12 Step Toolkit</b>
+            </a>
+            <nav aria-label="Main">
+                <a class="lit" href="/aa-literature">A.A. Literature</a>
                 <a href="/blog">Blog</a>
-                <a href="/get-the-app">Get the app</a>
+                <a class="cta" href="/get-app">Get the app</a>
             </nav>
         </div>
     </header>
 
-    <main>
-        <div class="wrap">
-            @isset($crumbs)
-                <nav class="crumbs" aria-label="Breadcrumb">
-                    @foreach($crumbs as $label => $href)
-                        @unless($loop->first)<span aria-hidden="true">›</span>@endunless
-                        @if($href === null){{ $label }}@else<a href="{{ $href }}">{{ $label }}</a>@endif
-                    @endforeach
-                </nav>
-            @endisset
-
+    <main id="main">
+        @if(($bare ?? false) === true)
             {{ $slot }}
-        </div>
+        @else
+            <div class="page">
+                <div class="wrap">
+                    @isset($crumbs)
+                        <nav class="crumbs" aria-label="Breadcrumb">
+                            @foreach($crumbs as $label => $href)
+                                @unless($loop->first)<span aria-hidden="true">›</span>@endunless
+                                @if($href === null){{ $label }}@else<a href="{{ $href }}">{{ $label }}</a>@endif
+                            @endforeach
+                        </nav>
+                    @endisset
+
+                    {{ $slot }}
+
+                    @unless($hideCta ?? false)
+                        <x-app-cta />
+                    @endunless
+                </div>
+            </div>
+        @endif
     </main>
 
     <footer class="site">
         <div class="wrap">
-            <span>&copy; {{ date('Y') }} iByte Apps Limited</span>
-            <a href="/privacy">Privacy</a>
-            <a href="/terms">Terms</a>
-            <a href="/contacts">Contact</a>
+            <div class="cols">
+                <div>
+                    <a class="brand" href="/">
+                        <span class="mark" aria-hidden="true"><img src="/images/design-logo.webp" alt="" width="21" height="21"></span>
+                        <b>12 Step Toolkit</b>
+                    </a>
+                    <p class="blurb">A free A.A. app for counting days, working the Steps with a sponsor and reading the Big Book.</p>
+                </div>
+                <div>
+                    <h4>Literature</h4>
+                    <ul>
+                        <li><a href="/aa-literature/big-book">The Big Book</a></li>
+                        <li><a href="/aa-literature/prayers">Prayers</a></li>
+                        <li><a href="/aa-literature/readings">Readings</a></li>
+                        <li><a href="/aa-literature">All literature</a></li>
+                    </ul>
+                </div>
+                <div>
+                    <h4>The app</h4>
+                    <ul>
+                        <li><a href="/get-app">Get the app</a></li>
+                        <li><a href="/blog">Blog</a></li>
+                        <li><a href="/contacts">Contact us</a></li>
+                    </ul>
+                </div>
+                <div>
+                    <h4>Legal</h4>
+                    <ul>
+                        <li><a href="/privacy">Privacy</a></li>
+                        <li><a href="/terms">Terms</a></li>
+                    </ul>
+                </div>
+            </div>
+            <div class="legal">
+                <span>&copy; {{ date('Y') }} iByte Apps Limited</span>
+                <span class="sep">Not affiliated with Alcoholics Anonymous World Services, Inc.</span>
+            </div>
         </div>
     </footer>
 </body>
