@@ -150,11 +150,35 @@
     }
 
     /* ---- Screens strip ------------------------------------------- */
-    .screens { display: flex; gap: 18px; overflow-x: auto; padding: 6px 0 18px; scroll-snap-type: x mandatory; }
+    /* The strip carries itself past, and stops when someone wants to look.
+       The second pass of the eleven screens is what makes the wrap seamless:
+       the track travels exactly one set and the loop is invisible. */
+    .screens {
+        overflow: hidden; padding: 6px 0 18px;
+        -webkit-mask-image: linear-gradient(90deg, transparent, #000 5%, #000 95%, transparent);
+        mask-image: linear-gradient(90deg, transparent, #000 5%, #000 95%, transparent);
+    }
+    .screens-track {
+        display: flex; gap: 18px; width: max-content;
+        animation: screens-marquee 70s linear infinite;
+    }
+    .screens:hover .screens-track,
+    .screens:focus-within .screens-track { animation-play-state: paused; }
     .screens img {
         flex: 0 0 auto; width: 190px; border-radius: 22px; background: #000;
-        scroll-snap-align: start;
         box-shadow: 0 18px 38px -16px rgb(20 34 56 / .35), 0 0 0 1px rgb(20 34 56 / .08);
+    }
+    @keyframes screens-marquee {
+        from { transform: translateX(0); }
+        to   { transform: translateX(calc(-50% - 9px)); }
+    }
+    /* Reduced motion gets the strip it had before — still every screen, just
+       scrolled by hand. The global reduce rule would otherwise collapse the
+       animation to nothing and snap it to the end. */
+    @media (prefers-reduced-motion: reduce) {
+        .screens { overflow-x: auto; scroll-snap-type: x mandatory; }
+        .screens-track { animation: none; width: auto; }
+        .screens img { scroll-snap-align: start; }
     }
 
     /* ---- Pricing ------------------------------------------------- */
@@ -380,10 +404,19 @@
             <h2>What it looks like</h2>
             <p>Eleven screens from the app.</p>
         </div>
-        <div class="screens">
-            @for($i = 1; $i <= 11; $i++)
-                <img src="/images/screens/Screen{{ $i }}@2x.webp" alt="12 Step Toolkit screen {{ $i }}" width="190" height="412" loading="lazy">
-            @endfor
+    </div>
+    {{-- Outside the wrap: the strip runs the full width and fades at both
+         ends, so the phones arrive and leave rather than being cut off at
+         the content column. --}}
+    <div class="screens">
+            <div class="screens-track">
+                @foreach([false, true] as $duplicate)
+                    @for($i = 1; $i <= 11; $i++)
+                        <img src="/images/screens/Screen{{ $i }}@2x.webp"
+                             @if($duplicate) alt="" aria-hidden="true" @else alt="12 Step Toolkit screen {{ $i }}" @endif
+                             width="190" height="412" loading="lazy">
+                    @endfor
+                @endforeach
         </div>
     </div>
 </section>

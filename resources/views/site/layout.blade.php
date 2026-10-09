@@ -17,6 +17,16 @@
     converted from what the Next.js site served rather than retyped, so the
     pages keep exactly the metadata Google already has for them.
 --}}
+@php
+    // One list, rendered twice: as the bar on wide screens and inside the
+    // menu on narrow ones. Two markup blocks, never two sets of links.
+    $nav = [
+        ['label' => 'A.A. Literature', 'href' => '/aa-literature'],
+        ['label' => 'Blog', 'href' => '/blog'],
+        ['label' => 'Contact', 'href' => '/contacts'],
+        ['label' => 'Web login', 'href' => config('site.identity.webApp')],
+    ];
+@endphp
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -159,34 +169,81 @@
         .brand .mark img { width: 21px; height: 21px; display: block; }
         .brand b { font-size: 1.0625rem; font-weight: 700; letter-spacing: -0.02em; white-space: nowrap; }
 
-        header.site nav { margin-left: auto; display: flex; align-items: center; gap: 4px; }
-        header.site nav a {
+        header.site nav.bar { margin-left: auto; display: flex; align-items: center; gap: 4px; }
+        header.site nav.bar a {
             color: var(--ink-soft); text-decoration: none; font-size: .9375rem; font-weight: 500;
             padding: 8px 12px; border-radius: var(--r-sm); white-space: nowrap;
             transition: color .2s var(--ease), background .2s var(--ease);
         }
-        header.site nav a:hover { color: var(--ink); background: var(--page-alt); }
-        header.site nav a.cta {
-            background: var(--brand-blue); color: #fff; margin-left: 6px;
-            border-radius: var(--r-pill); padding: 9px 18px;
-            box-shadow: var(--shadow-sm);
+        header.site nav.bar a:hover { color: var(--ink); background: var(--page-alt); }
+
+        header.site .cta {
+            background: var(--brand-blue); color: #fff; text-decoration: none;
+            font-size: .9375rem; font-weight: 600; white-space: nowrap;
+            border-radius: var(--r-pill); padding: 9px 18px; margin-left: 10px;
+            box-shadow: var(--shadow-sm); transition: background .2s var(--ease);
         }
-        header.site nav a.cta:hover { background: #2470a3; color: #fff; }
-        /* The web login keeps its place longest after the store button: it is
-           what a member who already has an account came here to find. */
-        @media (max-width: 860px) { header.site nav a.contact { display: none; } }
-        @media (max-width: 640px) {
+        header.site .cta:hover { background: #2470a3; }
+
+        /* ---- The menu ------------------------------------------------ */
+        .menu { display: none; position: relative; }
+        .menu summary {
+            list-style: none; cursor: pointer; width: 42px; height: 42px;
+            display: grid; place-items: center; border-radius: var(--r-sm);
+            border: 1px solid var(--rule); background: var(--card);
+        }
+        .menu summary::-webkit-details-marker { display: none; }
+        .menu summary:hover { background: var(--page-alt); }
+        .bars, .bars::before, .bars::after {
+            display: block; width: 18px; height: 2px; border-radius: 2px;
+            background: var(--ink); transition: transform .2s var(--ease), opacity .15s var(--ease);
+        }
+        .bars { position: relative; }
+        .bars::before, .bars::after { content: ''; position: absolute; left: 0; }
+        .bars::before { top: -6px; }
+        .bars::after  { top: 6px; }
+        .menu[open] .bars { background: transparent; }
+        .menu[open] .bars::before { transform: translateY(6px) rotate(45deg); }
+        .menu[open] .bars::after  { transform: translateY(-6px) rotate(-45deg); }
+
+        .menu .panel {
+            position: absolute; right: 0; top: calc(100% + 10px); z-index: 60;
+            min-width: 14rem; max-width: calc(100vw - 32px); padding: 8px;
+            background: var(--card); border: 1px solid var(--rule);
+            border-radius: var(--r-md); box-shadow: var(--shadow-lg);
+            display: flex; flex-direction: column; gap: 2px;
+        }
+        .menu .panel a {
+            display: block; padding: 11px 14px; border-radius: var(--r-sm);
+            color: var(--ink); text-decoration: none; font-size: .9375rem; font-weight: 500;
+        }
+        .menu .panel a:hover { background: var(--page-alt); color: var(--accent); }
+        .menu .panel .panel-cta {
+            margin-top: 6px; background: var(--brand-blue); color: #fff;
+            text-align: center; font-weight: 600;
+        }
+        .menu .panel .panel-cta:hover { background: #2470a3; color: #fff; }
+
+        /* The bar has room for four links and a button; below that the links
+           fold into the menu, and brand, button and menu have to fit 390px
+           between them with the gutters — so the gap and the button shrink
+           rather than pushing the menu off the right edge. */
+        @media (max-width: 820px) {
+            header.site .wrap { gap: 12px; }
+            header.site nav.bar { display: none; }
+            header.site .cta { margin-left: 0; order: 2; }
+            .menu { display: block; margin-left: auto; order: 3; }
+        }
+        @media (max-width: 440px) {
             header.site .wrap { gap: 8px; }
-            header.site nav { gap: 0; }
-            header.site nav a { padding: 8px 10px; font-size: .875rem; }
-            header.site nav a.lit { display: none; }
+            header.site .cta { padding: 8px 13px; font-size: .875rem; }
             .brand { gap: 9px; }
-            .brand b { font-size: .9375rem; }
+            .brand b { font-size: .875rem; }
             .brand .mark { width: 30px; height: 30px; border-radius: 9px; }
             .brand .mark img { width: 18px; height: 18px; }
+            .menu summary { width: 38px; height: 38px; }
         }
-        @media (max-width: 440px) { header.site nav a.weblogin { display: none; } }
-        @media (max-width: 380px) { .brand b { display: none; } }
+        @media (max-width: 340px) { .brand b { display: none; } }
 
         /* ---- Page furniture ------------------------------------------ */
         main { display: block; }
@@ -361,13 +418,28 @@
             {{-- The production site's top level was Literature, Blog, Web
                  Login and Contact Us. The web app link is the one people go
                  looking for and the port had dropped it. --}}
-            <nav aria-label="Main">
-                <a class="lit" href="/aa-literature">A.A. Literature</a>
-                <a class="lit" href="/blog">Blog</a>
-                <a class="contact" href="/contacts">Contact</a>
-                <a class="weblogin" href="{{ config('site.identity.webApp') }}">Web login</a>
-                <a class="cta" href="/get-app">Get the app</a>
+            <nav class="bar" aria-label="Main">
+                @foreach($nav as $item)
+                    <a href="{{ $item['href'] }}">{{ $item['label'] }}</a>
+                @endforeach
             </nav>
+
+            <a class="cta" href="/get-app">Get the app</a>
+
+            {{-- The menu is a <details>, so it opens, closes and takes focus
+                 without a line of JavaScript, and it still works if the
+                 script that is not there fails to load. --}}
+            <details class="menu">
+                <summary aria-label="Menu">
+                    <span class="bars" aria-hidden="true"></span>
+                </summary>
+                <div class="panel">
+                    @foreach($nav as $item)
+                        <a href="{{ $item['href'] }}">{{ $item['label'] }}</a>
+                    @endforeach
+                    <a class="panel-cta" href="/get-app">Get the app</a>
+                </div>
+            </details>
         </div>
     </header>
 
