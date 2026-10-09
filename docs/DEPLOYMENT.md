@@ -125,7 +125,7 @@ ls -lh ~/Desktop/12steptoolkit-api.zip
 The clone copies what is **committed**, so anything uncommitted is simply not
 in the zip.
 
-## 3. In Plesk: the folder, then the three prefixes
+## 3. In Plesk: the folder, then the four prefixes
 
 No new subdomain, and **do not touch Hosting → Document root.** The only
 Plesk change is in one text box.
@@ -383,6 +383,11 @@ outage is no reason to fail a deploy.
 SITE_NOINDEX=true
 SITE_SERVES_WEBSITE=false
 ```
+
+`/my` is governed by neither: `MemberSession` sends `noindex, nofollow` and
+`no-store` on every one of its pages unconditionally, for the same reason the
+console does. Somebody's Step Four is not a page that becomes indexable on the
+day the marketing site does.
 
 `SITE_SERVES_WEBSITE` is the one that describes the arrangement: this
 application is on `12steptoolkit.com`'s host but does not own `/`. Being on
