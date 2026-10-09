@@ -78,7 +78,7 @@ argument for the whole step: if any of it is wrong they stay 404s.
 Three things this step must not do, and the reason each one matters:
 
 * **It must not change the document root of `12steptoolkit.com`.** That root
-  serves the Next.js export: **205 URLs in `sitemap.xml`**, 180 of them the
+  serves the Next.js export: **169 URLs in `sitemap.xml`**, 105 of them the
   A.A. literature, plus `app-ads.txt` (which AdMob fetches) and the
   `/app/reset/*` landing pages that links in already-sent emails point at.
   This application serves one route at `/` today, so moving that root now would

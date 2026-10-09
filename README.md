@@ -185,10 +185,14 @@ a token. `docs/STORE_SETUP.md` is the matching checklist.
 | File | What it answers |
 |------|-----------------|
 | `ARCHITECTURE.md` | why the old contract is the main one, how the three applications are kept apart, what each legacy hole was and what replaced it |
+| `AUDIT_AND_IMPROVEMENTS.md` | what was found in the live system — seven security findings with the statement that proves each — what was fixed in the port, and what is still open |
+| `FEATURE_PARITY.md` | the old surface mapped onto this one: /18 against v19, the web app against `/my`, the website, and the differences that are decisions rather than gaps |
+| `MIGRATION_PLAN.md` | how the people, the data and the traffic move — and why the data does not |
+| `STORE_RELEASE_CHECKLIST.md` | what has to be true before submitting an app release, including the account-deletion requirement that blocks review |
 | `IMPLEMENTATION_STATUS.md` | what is built, what is stubbed, what is not started |
 | `docs/DEPLOYMENT.md` | the first install — `api/` beside the website's document root, three nginx prefixes, then `app_update_toolkit` for ever after |
 | `docs/CUTOVER.md` | the order of the switch-over, and how to switch back |
-| `docs/WEBSITE_TAKEOVER.md` | what has to be true before `12steptoolkit.com`'s document root can move here — 205 indexed URLs, measured |
+| `docs/WEBSITE_TAKEOVER.md` | what has to be true before `12steptoolkit.com`'s document root can move here — 169 indexed URLs, measured |
 | `docs/STORE_SETUP.md` | what to click in App Store Connect, Cloud Console and the Play Console, and how to read `billing:check` |
 | `docs/ENTITLEMENT_RULES.md` | who is premium and why — our own rules, replacing RevenueCat's |
 | `docs/OPEN_QUESTIONS.md` | the things that cannot be answered by reading code, each with the one command or screen that answers it — section A is now closed by the schema dump, and A6 is a live bug it turned up |

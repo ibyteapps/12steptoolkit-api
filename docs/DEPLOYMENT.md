@@ -38,7 +38,7 @@ through this application at all.
 Three things stay exactly as they are:
 
 * **The website.** `12steptoolkit.com`'s document root is still
-  `WEBSITES/12steptoolkit.com/out`, the Next.js export — 205 indexed URLs,
+  `WEBSITES/12steptoolkit.com/out`, the Next.js export — 169 indexed URLs,
   `sitemap.xml`, `robots.txt`, `app-ads.txt`, `reflections.php` and the
   `/app/reset/*` landing pages — served by the same nginx → Apache proxy, by
   the same rules, from the same files. `docs/WEBSITE_TAKEOVER.md` is what
@@ -404,7 +404,7 @@ and `SITE_NOINDEX` goes false must not be the day `/console/login` becomes
 indexable.
 
 The one way this bites is the takeover. Move the document root onto this
-application and leave `SITE_NOINDEX=true`, and all 205 URLs are de-indexed
+application and leave `SITE_NOINDEX=true`, and all 169 URLs are de-indexed
 within days. So when `SITE_SERVES_WEBSITE=true`, `deploy.sh` **fails the
 deploy** rather than warning:
 

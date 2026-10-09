@@ -17,7 +17,7 @@ list instead of a feeling.
 | | |
 |---|---|
 | HTML pages exported | **212** |
-| URLs in `sitemap.xml` | **205** |
+| URLs in `sitemap.xml` | **169** — counted from the live sitemap, not estimated; the fixture is `tests/Feature/Site/fixtures/indexed-urls.txt` |
 | of those, under `/aa-literature` | **180** |
 | of those, `/blog/…` | **19** |
 | Root pages | `/`, `/contacts`, `/get-app`, `/get-the-app`, `/privacy`, `/terms` |
@@ -31,7 +31,7 @@ rather than marketing copy.
 **What this application serves at `/` today:** one route, in
 `routes/site.php`, rendering `site.placeholder`.
 
-So the arithmetic of switching the document root today is 205 URLs in, one URL
+So the arithmetic of switching the document root today is 169 URLs in, one URL
 out. Every other address returns the application's 404. Search engines drop a
 404 within days and the recovery, if the pages come back under the same
 addresses, takes weeks.
@@ -78,7 +78,7 @@ rather than merely dropped.
 
 A checklist, not a plan — each line is a thing to tick.
 
-1. **Every one of the 205 sitemap URLs answers 200 from Laravel at the same
+1. **Every one of the 169 sitemap URLs answers 200 from Laravel at the same
    address.** Not "equivalent content at a tidier URL": the same address. A
    redesign is a separate argument to have after the move, not during it.
 2. **Each page keeps its `<title>`, meta description and canonical link.**
@@ -98,7 +98,7 @@ A checklist, not a plan — each line is a thing to tick.
    that moves the root.
 7. **`SITE_SERVES_WEBSITE=true` and `SITE_NOINDEX=false`** in `.env`. Both
    default the other way, because today this application does not own `/`;
-   left as they are, the move would de-index all 205 URLs in a few days.
+   left as they are, the move would de-index all 169 URLs in a few days.
    `deploy.sh` **fails** the deploy once `SITE_SERVES_WEBSITE` is true and
    `noindex` is still on, so forgetting it is caught by a machine rather than
    by the traffic graph a week later.
@@ -116,7 +116,7 @@ Numbers 1 and 2 are the work; the rest is an afternoon.
    of the document root, and graft `/console`, `/api/v2` and `/up` onto the
    domain with nginx (`DEPLOYMENT.md`, and the blocks in
    `docs/nginx/12steptoolkit.com.conf`). The document root does not move, the
-   export goes on serving all 205 URLs, and `/console` is already inside the
+   export goes on serving all 169 URLs, and `/console` is already inside the
    main website at `12steptoolkit.com/console`. **Nothing below is needed to
    get that far** — the list in §4 is only for the day `/` itself moves here,
    which may be never.
