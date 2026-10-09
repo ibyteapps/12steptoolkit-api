@@ -32,8 +32,18 @@ Route::middleware('auth:member')->group(function (): void {
     Route::post('sign-out', [SignInController::class, 'destroy'])->name('sign-out');
 
     Route::get('{slug}', [RecordController::class, 'index'])->name('records.index');
+
+    // `new` before `{id}` so the word is a route and not a record that does
+    // not exist; `{id}` is numeric, which settles it either way.
+    Route::get('{slug}/new', [RecordController::class, 'create'])->name('records.create');
+    Route::post('{slug}', [RecordController::class, 'store'])->name('records.store');
+
     Route::get('{slug}/{id}', [RecordController::class, 'show'])
         ->whereNumber('id')->name('records.show');
+    Route::get('{slug}/{id}/edit', [RecordController::class, 'edit'])
+        ->whereNumber('id')->name('records.edit');
+    Route::put('{slug}/{id}', [RecordController::class, 'update'])
+        ->whereNumber('id')->name('records.update');
     Route::delete('{slug}/{id}', [RecordController::class, 'destroy'])
         ->whereNumber('id')->name('records.destroy');
 });

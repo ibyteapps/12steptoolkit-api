@@ -19,6 +19,10 @@
         @endforelse
     </div>
 
+    <div class="rowbtns">
+        <a href="{{ route('my.records.edit', [$slug, $record->getKey()]) }}">Edit this entry</a>
+    </div>
+
     <form class="danger" method="POST" action="{{ route('my.records.destroy', [$slug, $record->getKey()]) }}"
           onsubmit="return confirm('Delete this permanently? It cannot be undone.')">
         @csrf

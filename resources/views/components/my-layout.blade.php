@@ -128,6 +128,42 @@
                     color: var(--ink-faint); margin: 0 0 6px; }
         .field dd { margin: 0; white-space: pre-wrap; }
 
+        textarea {
+            width: 100%; font: inherit; padding: 12px 14px; color: var(--ink);
+            background: var(--page); border: 1px solid var(--rule); border-radius: var(--r-md);
+            resize: vertical;
+        }
+        textarea:focus { border-color: var(--accent); }
+        .field.quiet { padding-top: 0; border-top: 0; }
+        .field.quiet label { font-size: .6875rem; }
+        .field .row { display: flex; gap: 11px; align-items: flex-start; cursor: pointer;
+                      font-size: 1rem; font-weight: 500; text-transform: none; letter-spacing: 0;
+                      color: var(--ink); margin: 0; }
+        .field .row input { margin-top: 5px; width: 17px; height: 17px; accent-color: var(--brand-blue); flex: 0 0 auto; }
+        .tags { display: flex; flex-wrap: wrap; gap: 8px; }
+        .tags label {
+            display: inline-flex; align-items: center; gap: 7px; cursor: pointer;
+            border: 1px solid var(--rule); border-radius: var(--r-pill); padding: 7px 14px;
+            font-size: .9375rem; font-weight: 500; text-transform: none; letter-spacing: 0;
+            color: var(--ink); margin: 0; background: var(--page);
+        }
+        .tags label:hover { border-color: var(--accent); }
+        .tags input { accent-color: var(--brand-blue); }
+        .tags label:has(input:checked) { border-color: var(--brand-blue); background: #eaf3fa; }
+
+        .newentry {
+            display: inline-block; margin: 0 0 20px; font: inherit; font-size: .9375rem;
+            font-weight: 600; text-decoration: none; background: var(--brand-blue); color: #fff;
+            padding: 10px 20px; border-radius: var(--r-pill); box-shadow: var(--shadow-sm);
+        }
+        .newentry:hover { background: #2470a3; color: #fff; }
+        .rowbtns { display: flex; gap: 12px; align-items: center; margin-top: 26px; }
+        .rowbtns a {
+            font-size: .9375rem; font-weight: 600; text-decoration: none; color: var(--ink);
+            border: 1px solid var(--rule); padding: 10px 18px; border-radius: var(--r-pill); background: var(--card);
+        }
+        .rowbtns a:hover { border-color: var(--accent); color: var(--accent); }
+
         form.danger { margin-top: 26px; }
         button.remove {
             font: inherit; font-size: .9375rem; cursor: pointer; background: none;

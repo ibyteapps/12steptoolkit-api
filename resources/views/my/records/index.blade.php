@@ -5,11 +5,13 @@
     @if(session('status'))<div class="flash">{{ session('status') }}</div>@endif
 
     <h1>{{ $type['plural'] }}</h1>
-    <p style="color:var(--ink-soft);margin:0 0 26px">{{ $type['blurb'] }}</p>
+    <p style="color:var(--ink-soft);margin:0 0 22px">{{ $type['blurb'] }}</p>
+
+    <a class="newentry" href="{{ route('my.records.create', $slug) }}">New {{ $type['label'] }}</a>
 
     <div class="card">
         @if($records->isEmpty())
-            <p class="empty">Nothing here yet. Anything you write in the app shows up here.</p>
+            <p class="empty">Nothing here yet. Write one here, or in the app — it is the same account either way.</p>
         @else
             <ul class="rows">
                 @foreach($records as $record)

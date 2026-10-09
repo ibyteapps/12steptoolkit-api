@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\My;
 
+use App\Services\My\RecordFields;
 use App\Services\My\RecordTypes;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\RedirectResponse;
@@ -41,11 +42,7 @@ class RecordController extends Controller
     {
         $type = $this->type($slug);
 
-        $record = RecordTypes::query($type, (int) Auth::id())->find($id);
-
-        if ($record === null) {
-            throw new NotFoundHttpException;
-        }
+        $record = $this->own($type, $id);
 
         return view('my.records.show', [
             'slug' => $slug,
@@ -53,6 +50,62 @@ class RecordController extends Controller
             'record' => $record,
             'fields' => $this->readableFields($type, $record),
         ]);
+    }
+
+    public function create(string $slug): View
+    {
+        $type = $this->type($slug);
+
+        return view('my.records.form', [
+            'slug' => $slug,
+            'type' => $type,
+            'record' => null,
+            'fields' => RecordFields::for($slug),
+            'values' => [],
+        ]);
+    }
+
+    public function edit(string $slug, int $id): View
+    {
+        $type = $this->type($slug);
+        $record = $this->own($type, $id);
+
+        return view('my.records.form', [
+            'slug' => $slug,
+            'type' => $type,
+            'record' => $record,
+            'fields' => RecordFields::for($slug),
+            'values' => $this->currentValues($slug, $record),
+        ]);
+    }
+
+    public function store(Request $request, string $slug): RedirectResponse
+    {
+        $type = $this->type($slug);
+        $model = $type['model'];
+
+        $record = new $model;
+        $record->forceFill($this->writable($request, $slug) + [
+            // The account is taken from the session, never from the form. A
+            // posted accountid is ignored because it is not in the whitelist.
+            'accountid' => (int) Auth::id(),
+            'tstamp' => time(),
+        ] + $type['where']);
+        $record->save();
+
+        return redirect()->route('my.records.show', [$slug, $record->getKey()])
+            ->with('status', 'Saved.');
+    }
+
+    public function update(Request $request, string $slug, int $id): RedirectResponse
+    {
+        $type = $this->type($slug);
+        $record = $this->own($type, $id);
+
+        $record->forceFill($this->writable($request, $slug));
+        $record->save();
+
+        return redirect()->route('my.records.show', [$slug, $id])->with('status', 'Saved.');
     }
 
     public function destroy(string $slug, int $id): RedirectResponse
@@ -70,6 +123,67 @@ class RecordController extends Controller
 
         return redirect()->route('my.records.index', $slug)
             ->with('status', 'Deleted.');
+    }
+
+    /**
+     * The values a form posted, reduced to the columns this type publishes.
+     *
+     * Built by walking the field definitions, not by reading the request — so
+     * a form that posts `accountid`, `shared` or `reviewed` writes none of
+     * them, whatever the browser sends.
+     */
+    private function writable(Request $request, string $slug): array
+    {
+        $out = [];
+
+        foreach (RecordFields::for($slug) as $field) {
+            $column = $field['column'];
+            $input = $request->input('f.'.$column);
+
+            $out[$column] = match ($field['kind']) {
+                // The legacy columns hold the words, not booleans.
+                'switch' => $request->boolean('f.'.$column) ? 'Yes' : 'No',
+                'done' => $request->boolean('f.'.$column) ? 1 : 0,
+                'tags' => implode(', ', array_values(array_intersect(
+                    $field['options'],
+                    (array) $request->input('f.'.$column, []),
+                ))),
+                'mood' => in_array($input, $field['options'], true) ? (string) $input : '',
+                default => trim((string) $input),
+            };
+        }
+
+        return $out;
+    }
+
+    /** @return array<string, mixed> */
+    private function currentValues(string $slug, $record): array
+    {
+        $values = [];
+
+        foreach (RecordFields::for($slug) as $field) {
+            $raw = (string) ($record->getRawOriginal($field['column']) ?? '');
+            $values[$field['column']] = match ($field['kind']) {
+                'switch' => strcasecmp($raw, 'Yes') === 0,
+                'done' => (int) $raw === 1,
+                'tags' => array_filter(array_map('trim', explode(',', $raw))),
+                default => $raw,
+            };
+        }
+
+        return $values;
+    }
+
+    /** One of the member's own records, or a 404. */
+    private function own(array $type, int $id)
+    {
+        $record = RecordTypes::query($type, (int) Auth::id())->find($id);
+
+        if ($record === null) {
+            throw new NotFoundHttpException;
+        }
+
+        return $record;
     }
 
     /** @return array<string, mixed> */

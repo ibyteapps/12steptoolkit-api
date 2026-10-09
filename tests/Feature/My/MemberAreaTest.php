@@ -2,7 +2,9 @@
 
 use App\Mail\SignInCode;
 use App\Models\Account;
+use App\Models\Inventory;
 use App\Models\Journal;
+use App\Models\Night;
 use Illuminate\Support\Facades\Mail;
 
 /*
@@ -179,4 +181,106 @@ it('signs out and stops being able to read anything', function () {
 
     $this->post(route('my.sign-out'))->assertRedirect(route('my.sign-in'));
     expect(auth('member')->check())->toBeFalse();
+});
+
+/*
+ |------------------------------------------------------------------------------
+ | Writing
+ |------------------------------------------------------------------------------
+ */
+
+it('writes a new record against the signed-in account, not a posted one', function () {
+    signInAsMember($this->me);
+
+    // The form posts an accountid as well. It must be ignored: the column is
+    // not in the field list, so the controller never reads it.
+    $this->post('/my/journals', [
+        'accountid' => $this->other->id,
+        'f' => ['description' => 'Written in the browser'],
+    ])->assertRedirect();
+
+    $written = Journal::query()->where('description', 'Written in the browser')->sole();
+
+    expect((int) $written->accountid)->toBe($this->me->id);
+});
+
+it('only writes the columns the type publishes', function () {
+    signInAsMember($this->me);
+
+    $this->post('/my/step-4', [
+        'f' => [
+            'invtitle' => 'My wife',
+            'myfault' => 'I was selfish.',
+            // None of these are fields on this form.
+            'shared' => 1,
+            'reviewed' => 1,
+            'inventoryforstep' => 10,
+        ],
+    ])->assertRedirect();
+
+    $written = Inventory::query()->where('invtitle', 'My wife')->sole();
+
+    expect((int) $written->getRawOriginal('shared'))->toBe(0)
+        ->and((int) $written->getRawOriginal('reviewed'))->toBe(0)
+        // The step comes from the slug, so a posted one cannot move a Step
+        // Four inventory into the Step Ten list.
+        ->and((int) $written->getRawOriginal('inventoryforstep'))->toBe(4);
+});
+
+it('will not open another account\'s record for editing', function () {
+    signInAsMember($this->me);
+
+    $this->get('/my/journals/'.$this->theirs->id.'/edit')->assertNotFound();
+    $this->get('/my/journals/'.$this->mine->id.'/edit')->assertOk();
+});
+
+it('will not write over another account\'s record', function () {
+    signInAsMember($this->me);
+
+    $this->put('/my/journals/'.$this->theirs->id, ['f' => ['description' => 'Overwritten']])
+        ->assertNotFound();
+
+    expect($this->theirs->fresh()->getRawOriginal('description'))->toBe('Not for me');
+});
+
+it('edits the member\'s own record', function () {
+    signInAsMember($this->me);
+
+    $this->put('/my/journals/'.$this->mine->id, ['f' => ['description' => 'Edited here']])
+        ->assertRedirect(route('my.records.show', ['journals', $this->mine->id]));
+
+    expect($this->mine->fresh()->getRawOriginal('description'))->toBe('Edited here');
+});
+
+/*
+ | The nightly inventory's twelve questions map to desc1..desc12, and eleven of
+ | them have a Yes/No switch. Question eight asks what could have been done
+ | better, which has no yes or no — hence no sw8.
+ */
+it('saves the nightly inventory as the app stores it', function () {
+    signInAsMember($this->me);
+
+    $this->post('/my/nightly', [
+        'f' => ['sw1' => '1', 'desc1' => 'Short with my brother.', 'desc8' => 'Listened more.'],
+    ])->assertRedirect();
+
+    $night = Night::query()->where('accountid', $this->me->id)->sole();
+
+    expect($night->getRawOriginal('sw1'))->toBe('Yes')
+        ->and($night->getRawOriginal('sw2'))->toBe('No')
+        ->and($night->getRawOriginal('desc1'))->toBe('Short with my brother.')
+        ->and($night->getRawOriginal('desc8'))->toBe('Listened more.');
+
+    expect(Night::SWITCHES)->not->toContain('sw8');
+});
+
+it('keeps the Step Four tags to the six the app offers', function () {
+    signInAsMember($this->me);
+
+    $this->post('/my/step-4', [
+        'f' => ['invtitle' => 'The office', 'affectsmy' => ['Pride', 'Security', 'Something I invented']],
+    ])->assertRedirect();
+
+    expect(Inventory::query()->where('invtitle', 'The office')->sole()->getRawOriginal('affectsmy'))
+        ->toBe('Pride, Security');
 });
