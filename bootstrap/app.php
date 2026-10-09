@@ -2,6 +2,7 @@
 
 use App\Exceptions\ApiExceptionRenderer;
 use App\Http\Middleware\AssignRequestId;
+use App\Http\Middleware\CanonicalUrl;
 use App\Http\Middleware\ConsoleAuthenticate;
 use App\Http\Middleware\ConsoleSession;
 use App\Http\Middleware\EnsureSyncAllowed;
@@ -55,6 +56,10 @@ return Application::configure(basePath: dirname(__DIR__))
 
         $middleware->prepend(AssignRequestId::class);
         $middleware->append(SecurityHeaders::class);
+
+        // One address per page, for the website's pages. Prepended so a
+        // redirect costs nothing else: no session, no route resolution.
+        $middleware->prepend(CanonicalUrl::class);
 
         $middleware->api(prepend: [
             ForceJsonResponse::class,

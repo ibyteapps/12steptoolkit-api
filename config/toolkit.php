@@ -17,6 +17,20 @@ return [
     | and Apple — and all four have to keep working, because all four are in
     | the field. What changes is how they are checked, not that they exist.
     */
+    /*
+    |--------------------------------------------------------------------------
+    | Support
+    |--------------------------------------------------------------------------
+    |
+    | The address on the public contact page, and where a reply comes from.
+    | The static site put a form here that posted off-site; this application
+    | already has `support_tickets` and a console screen for answering them,
+    | so the eventual form opens a ticket. Until then the address is the page.
+    */
+    'support' => [
+        'email' => env('SUPPORT_EMAIL', 'support@12steptoolkit.com'),
+    ],
+
     'auth' => [
         // Sanctum personal access tokens. The legacy JWT had a 296,000,000-second
         // life (about 9.4 years) and no revocation list, which is why a single

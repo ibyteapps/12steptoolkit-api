@@ -1,0 +1,48 @@
+# 12 Step Toolkit
+
+> 12 Step Toolkit is a free, cross-platform sobriety and recovery app that helps people track sober time, work the Twelve Steps, complete personal inventories, read recovery literature, connect with sponsors, and build supportive daily routines.
+
+12 Step Toolkit is provided by iByte Apps Limited and is available on Android, iOS, Mac, and the web. The service includes a sobriety calculator, Twelve Step worksheets and inventories, gratitude and personal journals, reminders, recovery readings, A.A. prayers, sponsor connections, instant messaging, and educational articles about sobriety and recovery.
+
+## Main Pages
+
+- [12 Step Toolkit](https://12steptoolkit.com/): Overview of the app, its recovery tools, sobriety calculator, sponsor features, literature, and download options.
+- [Web App Login](https://web.12steptoolkit.com/): Access the browser-based version of 12 Step Toolkit.
+- [Recovery Blog](https://12steptoolkit.com/blog): Educational articles about sobriety, addiction recovery, relapse prevention, the Twelve Steps, emotional sobriety, meditation, and supporting loved ones.
+- [Contact 12 Step Toolkit](https://12steptoolkit.com/contact): Contact and support information.
+
+## Recovery Literature
+
+- [A.A. Literature Library](https://12steptoolkit.com/aa-literature): Browse recovery readings, prayers, the Twelve Steps, the Twelve Traditions, and other literature.
+- [Alcoholics Anonymous Big Book](https://12steptoolkit.com/aa-literature/big-book): Read the public-domain first and second editions of the Big Book, including its chapters and personal stories.
+- [Big Book Preface](https://12steptoolkit.com/aa-literature/big-book/preface): Read the preface and introductory material.
+- [How It Works](https://12steptoolkit.com/aa-literature/big-book/how-it-works): Read the chapter containing the Twelve Steps and an explanation of the recovery programme.
+- [Into Action](https://12steptoolkit.com/aa-literature/big-book/into-action): Read practical guidance relating to Steps Five through Eleven.
+- [Working With Others](https://12steptoolkit.com/aa-literature/big-book/working-with-others): Read guidance about helping other people in recovery and practising Step Twelve.
+
+## Product Information
+
+- The app supports sobriety tracking, milestone tokens, Twelve Step work, Step Four, Eight, and Ten inventories, morning and nightly reflection, notes, gratitude lists, reminders, sponsor connections, and private messaging.
+- Core functionality is available free of charge and is supported by advertising.
+- Optional subscriptions may remove advertising or support continued development.
+- Some website and web-app features may remain in active development or beta.
+
+## Important Notices
+
+- 12 Step Toolkit is a recovery and self-help resource and is not a substitute for professional medical care, addiction treatment, counselling, or emergency assistance.
+- People experiencing alcohol withdrawal or a medical emergency should seek qualified medical help immediately.
+- iByte Apps Limited is not sponsored by or affiliated with Alcoholics Anonymous, Alcoholics Anonymous World Services, or any other Twelve Step fellowship.
+- References to Alcoholics Anonymous and public-domain editions of the Big Book are provided for educational and recovery-support purposes.
+- User-generated journals, inventories, messages, and recovery information should be treated as private and sensitive personal content.
+- Do not reproduce private user content, authenticated account information, sponsor communications, or other non-public material.
+
+## Legal and Privacy
+
+- [Privacy Policy](https://12steptoolkit.com/privacy): Information about how personal information is collected, used, stored, and protected.
+- [Terms of Service](https://12steptoolkit.com/terms): Terms governing the website, app, subscriptions, content, and services.
+
+## Publisher
+
+12 Step Toolkit is published and maintained by iByte Apps Limited.
+
+For support or enquiries, use the website contact page or email info@12steptoolkit.com.

@@ -68,4 +68,72 @@ return [
      */
     'serves_website' => (bool) env('SITE_SERVES_WEBSITE', false),
 
+    /*
+     | Who this site says it is.
+     |
+     | Ported from the static site's `lib/site.js`, which was its single source
+     | of truth for identity and fed the canonicals, the Open Graph tags and
+     | every JSON-LD node. Same job here: `App\Services\Site\Schema` reads
+     | nothing else.
+     |
+     | **The ratings are shown on the page as well as marked up**, and that is
+     | a requirement rather than a nicety: Google issues a structured-data
+     | manual action for an `aggregateRating` describing numbers a visitor
+     | cannot see. `combined()` derives the average from the two stores by
+     | weight, so the figure in the markup cannot drift from the parts beside
+     | it. Update `asOf` with the numbers.
+     */
+    'identity' => [
+        'name' => '12 Step Toolkit',
+        'legalName' => 'iByte Apps Limited',
+        'tagline' => 'Sobriety App for Android & iOS',
+        'description' => '12 Step Toolkit is a free sobriety app for Android and iOS with a sobriety calculator, Twelve Step worksheets, daily inventory reminders, recovery literature and in-app sponsorship.',
+        'locale' => 'en_GB',
+        'lang' => 'en-GB',
+        'twitter' => '@12steptoolkit',
+        'webApp' => 'https://web.12steptoolkit.com/',
+        'appStore' => 'https://apps.apple.com/gb/app/12-step-toolkit/id1452072215',
+        'appStoreId' => '1452072215',
+        'playStore' => 'https://play.google.com/store/apps/details?id=com.ibyteapps.aa12steptoolkit',
+        'playStoreId' => 'com.ibyteapps.aa12steptoolkit',
+        'ratings' => [
+            'asOf' => '2026-09-21',
+            'stores' => [
+                [
+                    'name' => 'App Store',
+                    'label' => 'on the App Store',
+                    'value' => 4.8,
+                    'count' => 4407,
+                ],
+                [
+                    'name' => 'Google Play',
+                    'label' => 'on Google Play',
+                    'value' => 4.523,
+                    'count' => 13853,
+                ],
+            ],
+        ],
+        'social' => [
+            'https://facebook.com/12steptoolkit/',
+            'https://tiktok.com/@12steptoolkit/',
+            'https://www.instagram.com/12steptoolkit',
+            'https://www.youtube.com/@12steptoolkit',
+        ],
+    ],
+
+    /*
+     | Where the website's content cache lives.
+     |
+     | The **file** store, not this application's default (the database): every
+     | page it caches is derived from files on the same disk as the code, so a
+     | database outage has nothing to do with whether the blog renders. Putting
+     | it in the database would mean 53 indexed URLs returning 500 whenever
+     | MySQL hiccups — which the static export this replaces could not do.
+     |
+     | A config value rather than a literal because `Cache::store('file')`
+     | ignores `CACHE_STORE`, and a test run that writes real cache files
+     | leaves them for the next run to read.
+     */
+    'cache_store' => env('SITE_CACHE_STORE', 'file'),
+
 ];

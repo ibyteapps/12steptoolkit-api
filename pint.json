@@ -7,6 +7,8 @@
         "public/index2.php",
         "public/privacy.php",
         "public/read.php",
-        "public/terms.php"
+        "public/terms.php",
+        "bootstrap/cache/*",
+        "resources/site/literature/*"
     ]
 }
