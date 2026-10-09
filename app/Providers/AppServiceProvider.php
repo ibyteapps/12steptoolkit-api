@@ -5,6 +5,9 @@ namespace App\Providers;
 use App\Models\Account;
 use App\Models\PersonalAccessToken;
 use App\Services\Auth\JwksIdentityTokenVerifier;
+use App\Services\Push\FcmPushSender;
+use App\Services\Push\LogPushSender;
+use App\Services\Push\PushSender;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\RateLimiter;
@@ -16,6 +19,16 @@ class AppServiceProvider extends ServiceProvider
 {
     public function register(): void
     {
+        /*
+         | The push transport. `log` is the default and sends nothing, which is
+         | what every environment without a Firebase key should do — including
+         | production until somebody has watched a real send.
+         */
+        $this->app->bind(PushSender::class, fn () => match ((string) config('push.driver')) {
+            'fcm' => new FcmPushSender,
+            default => new LogPushSender,
+        });
+
         $this->app->bind('identity.verifier.google', fn () => new JwksIdentityTokenVerifier(
             jwksUrl: (string) config('services.google.jwks_url'),
             issuers: (array) config('services.google.issuers'),
