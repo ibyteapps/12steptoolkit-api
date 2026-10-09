@@ -39,9 +39,15 @@ return [
     */
 
     'guards' => [
-        // There is no web guard for app accounts: the app signs in with a
-        // token, and the only session in this application belongs to the
-        // console.
+        // The member area (/my) — the web version of the app. A session
+        // guard over the same `accounts` the apps use, so a member reads
+        // their own Step work in a browser without a token in JavaScript.
+        // `App\Http\Middleware\MemberSession` makes this the default guard
+        // for that area and nowhere else.
+        'member' => [
+            'driver' => 'session',
+            'provider' => 'accounts',
+        ],
 
         // The staff console (/console): its own accounts, never the app's users.
         'console' => [

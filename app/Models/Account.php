@@ -40,6 +40,20 @@ use Laravel\Sanctum\HasApiTokens;
 class Account extends Authenticatable
 {
     use HasApiTokens;
+
+    /**
+     * The legacy `accounts` table has no `remember_token` column.
+     *
+     * Returning null tells Laravel's session guard not to read or write one,
+     * which is what stops a "remember me" login trying to UPDATE a column
+     * that does not exist. Both apps authenticate with tokens and never used
+     * it either.
+     */
+    public function getRememberTokenName(): ?string
+    {
+        return null;
+    }
+
     use HasFactory;
     use LegacyTable;
 

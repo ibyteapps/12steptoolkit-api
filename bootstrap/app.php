@@ -7,6 +7,7 @@ use App\Http\Middleware\ConsoleAuthenticate;
 use App\Http\Middleware\ConsoleSession;
 use App\Http\Middleware\EnsureSyncAllowed;
 use App\Http\Middleware\ForceJsonResponse;
+use App\Http\Middleware\MemberSession;
 use App\Http\Middleware\ResolveInstall;
 use App\Http\Middleware\SecurityHeaders;
 use App\Http\Middleware\VerifyAppleSecret;
@@ -46,12 +47,20 @@ return Application::configure(basePath: dirname(__DIR__))
             // to a page.
             Route::middleware(['console.session', 'web'])->prefix('console')->name('console.')
                 ->group(__DIR__.'/../routes/backoffice.php');
+            // The member area, before the site routes for the same reason as
+            // the console: /my must never fall through to a page.
+            Route::middleware(['member.session', 'web'])->prefix('my')->name('my.')
+                ->group(__DIR__.'/../routes/my.php');
             Route::middleware(SubstituteBindings::class)->group(__DIR__.'/../routes/site.php');
         },
     )
     ->withMiddleware(function (Middleware $middleware): void {
         // The API is a token API with no login page; only the console has one.
-        $middleware->redirectGuestsTo(fn (Request $request) => $request->is('console', 'console/*') ? route('console.login') : null);
+        $middleware->redirectGuestsTo(fn (Request $request) => match (true) {
+            $request->is('my', 'my/*') => route('my.sign-in'),
+            $request->is('console', 'console/*') => route('console.login'),
+            default => null,
+        });
         $middleware->redirectUsersTo(fn (Request $request) => route('console.home'));
 
         $middleware->prepend(AssignRequestId::class);
@@ -76,6 +85,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'legacy.signed' => VerifyLegacySignature::class,
             'legacy.apple' => VerifyAppleSecret::class,
             'console.session' => ConsoleSession::class,
+            'member.session' => MemberSession::class,
             'console.auth' => ConsoleAuthenticate::class,
             'sync.allowed' => EnsureSyncAllowed::class,
         ]);
