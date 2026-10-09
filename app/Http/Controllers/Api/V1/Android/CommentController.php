@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api\V1\Android;
 
+use App\Jobs\NotifyThreadOfComment;
 use App\Models\BlockedUser;
 use App\Models\Comment;
 use App\Models\CommentReaction;
@@ -303,6 +304,10 @@ class CommentController extends Controller
 
             $commentId = (int) $comment->id;
             $action = 'ADD';
+
+            // Tell the rest of the thread. Only on ADD: an edit is not an
+            // event anybody's phone needs to light up for.
+            NotifyThreadOfComment::dispatch($commentId, $accountId);
         }
 
         // The old response: `comment_id` at the top level as well as inside
