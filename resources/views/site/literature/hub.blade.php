@@ -1,6 +1,6 @@
 <x-site-layout
-    title="A.A. Literature | The Big Book, Prayers and Readings | 12 Step Toolkit"
-    description="Read the Big Book of Alcoholics Anonymous, the personal stories from both editions, the A.A. prayers and the readings — free, and without an account."
+    title="A.A. Literature Library — Big Book, Stories, Readings & Prayers"
+    description="Read 105 pieces of A.A. literature free online: the Big Book, all 69 personal stories from the first and second editions, daily readings and prayers."
     keywords="aa literature, big book online, aa prayers, aa readings, personal stories"
     :crumbs="['A.A. Literature' => null]"
     :schema="$schema"

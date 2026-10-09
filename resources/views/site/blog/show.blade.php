@@ -9,7 +9,7 @@
     articles underneath. The first Laravel cut had none of them.
 --}}
 <x-site-layout
-    :title="$post['title']"
+    :title="$post['title'].' | 12 Step Toolkit'"
     :description="$post['description']"
     :keywords="$post['keywords']"
     og-type="article"

@@ -35,6 +35,39 @@ class LiteratureLibrary
     ];
 
     /**
+     * The title and description each section is indexed under.
+     *
+     * Written out rather than generated from the heading, because these are
+     * the strings Google already has for six indexed pages and a generated
+     * "Prayers | A.A. Literature | 12 Step Toolkit" is not one of them. The
+     * live descriptions also name what is in each section — the Serenity
+     * Prayer, the Ninth Step Promises, 29 stories from 1939 — which is doing
+     * more work in a search result than "free and without an account".
+     */
+    public const SECTION_META = [
+        'big-book' => [
+            'title' => 'Alcoholics Anonymous — The Big Book, Free Online',
+            'description' => "Read the Big Book of Alcoholics Anonymous free online: the Doctor's Opinion, all core chapters, the Twelve Steps and the personal stories.",
+        ],
+        'stories-edition-1' => [
+            'title' => 'Personal Stories — First Edition (1939) | A.A. Big Book',
+            'description' => 'All 29 pioneer recovery stories from the 1939 First Edition of Alcoholics Anonymous, free to read online.',
+        ],
+        'stories-edition-2' => [
+            'title' => 'Personal Stories — Second Edition (1955) | A.A. Big Book',
+            'description' => 'All 40 personal recovery stories from the 1955 Second Edition of Alcoholics Anonymous, free to read online.',
+        ],
+        'prayers' => [
+            'title' => 'A.A. Prayers & Meditations | 12 Step Toolkit',
+            'description' => "A.A. prayers and meditations including the Third and Seventh Step prayers, the Serenity Prayer, the Resentment Prayer and St Francis' Peace Prayer.",
+        ],
+        'readings' => [
+            'title' => 'A.A. Readings & Study Material | 12 Step Toolkit',
+            'description' => 'Key A.A. study readings: How It Works, the Ninth Step Promises, the A.A. Preamble, the Twelve Traditions, Just For Today and more.',
+        ],
+    ];
+
+    /**
      * What one item in each section is, in singular, for counting.
      *
      * "29 pages" was wrong on every card: these are not pages of anything,

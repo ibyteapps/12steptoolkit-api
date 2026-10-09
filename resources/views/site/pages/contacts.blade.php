@@ -9,7 +9,7 @@
 --}}
 <x-site-layout
     title="Contact Us | 12 Step Toolkit Support"
-    description="Get in touch with 12 Step Toolkit about the app, your account, a subscription or anything else."
+    description="Questions, feedback or a support issue with the 12 Step Toolkit app? Send us a message and an A.A. member on the team will get back to you."
     :crumbs="['Contact' => null]"
 >
     <h1>Get in touch with us</h1>

@@ -19,14 +19,20 @@ use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 class LiteratureController extends Controller
 {
     /**
-     * The book each section's text comes from, for `isBasedOn`. The prayers
-     * and readings are gathered from across the literature rather than being
-     * one book's chapters, so they name none.
+     * The book each section's text comes from, for `isBasedOn`, named exactly
+     * as the production site named it.
+     *
+     * The readings belong here: How It Works, the Promises, the Twelve
+     * Traditions and Just For Today are Big Book text, and the live pages all
+     * carried the attribution — leaving it off dropped the `Book` node from
+     * eight indexed pages. The prayers are gathered from across the
+     * literature and across the fellowship, and named no book live either.
      */
     private const PART_OF = [
-        'big-book' => 'Alcoholics Anonymous',
-        'stories-edition-1' => 'Alcoholics Anonymous, First Edition',
-        'stories-edition-2' => 'Alcoholics Anonymous, Second Edition',
+        'big-book' => 'Alcoholics Anonymous (The Big Book)',
+        'readings' => 'Alcoholics Anonymous (The Big Book)',
+        'stories-edition-1' => 'Alcoholics Anonymous — Personal Stories (Edition 1)',
+        'stories-edition-2' => 'Alcoholics Anonymous — Personal Stories (Edition 2)',
     ];
 
     public function __construct(

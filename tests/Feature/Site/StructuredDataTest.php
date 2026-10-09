@@ -67,8 +67,22 @@ it('marks a literature page as an article based on the book it comes from', func
 
     expect($article)->not->toBeNull()
         ->and($article['headline'])->toBe(app(LiteratureLibrary::class)->find('bills-story')['title'])
-        ->and($article['isBasedOn']['name'])->toBe('Alcoholics Anonymous')
+        ->and($article['isBasedOn']['name'])->toBe('Alcoholics Anonymous (The Big Book)')
         ->and($article['isBasedOn']['author']['name'])->toBe('Alcoholics Anonymous');
+});
+
+/*
+ | How It Works, the Promises, the Twelve Traditions and Just For Today are
+ | Big Book text, and all eight live reading pages carried the attribution.
+ | The port left it off, which dropped the `Book` node from eight indexed
+ | pages.
+ */
+it('attributes the readings to the Big Book, as the live pages do', function () {
+    $graph = graphOf($this->get('/aa-literature/readings/how-it-works')->assertOk()->getContent());
+    $article = collect($graph)->firstWhere('@type', 'Article');
+
+    expect($article['isBasedOn']['@type'])->toBe('Book')
+        ->and($article['isBasedOn']['name'])->toBe('Alcoholics Anonymous (The Big Book)');
 });
 
 it('does not claim a prayer is a chapter of a book', function () {

@@ -6,8 +6,8 @@
     `public/images/blog` unused.
 --}}
 <x-site-layout
-    title="Recovery Blog | Sobriety, Sponsorship and the Twelve Steps | 12 Step Toolkit"
-    description="Practical writing on early sobriety, finding and working with a sponsor, the Twelve Steps and the Twelve Traditions of Alcoholics Anonymous."
+    title="Recovery Blog | 12 Step Toolkit"
+    description="Practical articles about recovery, sobriety, the Twelve Steps, personal growth and maintaining a healthy recovery routine."
     keywords="aa blog, recovery blog, sobriety advice, aa sponsorship, twelve steps"
     :crumbs="['Blog' => null]"
     :schema="$schema"

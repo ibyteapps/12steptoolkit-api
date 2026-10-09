@@ -1,6 +1,6 @@
 <x-site-layout
-    :title="$heading.' | A.A. Literature | 12 Step Toolkit'"
-    :description="'Read '.$heading.' from the literature of Alcoholics Anonymous, free and without an account.'"
+    :title="\App\Services\Site\LiteratureLibrary::SECTION_META[$section]['title']"
+    :description="\App\Services\Site\LiteratureLibrary::SECTION_META[$section]['description']"
     :crumbs="['A.A. Literature' => '/aa-literature', $heading => null]"
     :schema="$schema"
 >

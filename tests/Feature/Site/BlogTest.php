@@ -35,7 +35,8 @@ it('serves every post with its own title and description', function () {
 
         $html = $response->getContent();
 
-        if (! str_contains($html, '<title>'.e($post['title']).'</title>')) {
+        // The brand suffix is part of the indexed title on all 52 posts.
+        if (! str_contains($html, '<title>'.e($post['title']).' | 12 Step Toolkit</title>')) {
             $failures[] = "{$post['path']} is missing its title";
         }
 

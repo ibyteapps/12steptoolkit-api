@@ -230,3 +230,37 @@ it('answers 410 for the page that is deliberately gone', function () {
         $this->get('/'.$path)->assertStatus(410);
     }
 });
+
+/*
+ | The metadata Google already has.
+ |
+ | Every indexed URL's <title> and description are pinned to what the static
+ | site served, captured from the production build rather than retyped. The
+ | port quietly rewrote eight of them and dropped the brand suffix from all 52
+ | blog titles, which is a rewrite of 59 search results — so this is asserted
+ | per page rather than trusted.
+ */
+it('serves the title and description each indexed URL is ranked under', function () {
+    $expected = require __DIR__.'/fixtures/indexed-meta.php';
+
+    foreach ($expected as $path => $meta) {
+        $html = $this->get($path)->assertOk()->getContent();
+
+        preg_match('#<title[^>]*>(.*?)</title>#s', $html, $t);
+        preg_match('#<meta[^>]+name="description"[^>]+content="(.*?)"#s', $html, $d);
+
+        expect(html_entity_decode($t[1] ?? ''))->toBe($meta['title'], "title for {$path}")
+            ->and(html_entity_decode($d[1] ?? ''))->toBe($meta['description'], "description for {$path}");
+    }
+})->group('seo');
+
+/*
+ | `{{ $title }}` escapes, so a title attribute written with `&amp;` reaches
+ | the browser tab — and the search result — as `&amp;amp;`. It has happened
+ | twice: on the home page and on the literature hub.
+ */
+it('never double-escapes an entity in the head', function () {
+    foreach (array_keys(require __DIR__.'/fixtures/indexed-meta.php') as $path) {
+        expect($this->get($path)->getContent())->not->toContain('&amp;amp;', "on {$path}");
+    }
+})->group('seo');
