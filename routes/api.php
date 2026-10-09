@@ -12,6 +12,7 @@ use App\Http\Controllers\Api\V1\Android\RecordController;
 use App\Http\Controllers\Api\V1\Android\ReminderController;
 use App\Http\Controllers\Api\V1\Android\ReviewController;
 use App\Http\Controllers\Api\V1\Android\SponsorController;
+use App\Http\Controllers\Api\V1\Android\ThreadBackfillController;
 use App\Http\Controllers\Api\V1\Apple\AppleScriptController;
 use App\Http\Controllers\Api\V2\HealthController;
 use Illuminate\Support\Facades\Route;
@@ -121,6 +122,13 @@ $android = function (): void {
          */
         Route::post('delete_account.php', DeleteAccountController::class)
             ->middleware('throttle:legacy-login');
+
+        /*
+         | The once-per-account iOS back-fill, called by s011. The live script
+         | is REQUIRE_AUTH false and takes the account from the query string,
+         | so anybody could run one against anybody.
+         */
+        Route::post('check_threads_connections_with_another_account.php', ThreadBackfillController::class);
 
         foreach (RecordController::ENDPOINTS as $script => $call) {
             Route::post($script, [RecordController::class, $call]);

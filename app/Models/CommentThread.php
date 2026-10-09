@@ -25,6 +25,21 @@ class CommentThread extends Model
 
     protected $guarded = ['*'];
 
+    /**
+     * `comment_threads.created` is a unix epoch, not a datetime.
+     *
+     * `LegacyTable` casts a `created` column through `legacyDate()`, which is
+     * right for the tables where it holds '2021-04-02 11:30:00' and wrong
+     * here: `Carbon::parse('1577836800')` throws, the accessor swallows it,
+     * and `$thread->created` comes back null however old the thread is.
+     * Nothing read it, so nothing was visibly broken — which is the kind of
+     * thing that stays true until somebody sorts a thread list by it.
+     */
+    public function getCreatedAttribute(mixed $value): ?int
+    {
+        return $value === null ? null : (int) $value;
+    }
+
     public function comments(): HasMany
     {
         return $this->hasMany(Comment::class, 'thread_id', 'id');

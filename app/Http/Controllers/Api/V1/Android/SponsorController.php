@@ -3,9 +3,8 @@
 namespace App\Http\Controllers\Api\V1\Android;
 
 use App\Models\BlockedUser;
-use App\Models\CommentThread;
-use App\Models\CommentThreadSubscriber;
 use App\Models\Sponsor;
+use App\Services\Chat\OneToOneThread;
 use App\Services\Legacy\LegacyEnvelope;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -281,54 +280,13 @@ class SponsorController extends Controller
     /**
      * The one-to-one thread for a pair, created if it is not there.
      *
-     * Found by looking for a non-group thread both are subscribed to, which is
-     * what `update_sponsors.php` does — and then creating one if there is none,
-     * exactly once, so accepting twice cannot leave two threads with the
-     * conversation split between them.
+     * The logic moved to {@see OneToOneThread} when the iOS back-fill needed
+     * the same find-or-create. Behaviour here is unchanged: a thread dated
+     * now, with neither subscriber marked admin.
      */
     private function threadFor(int $a, int $b): int
     {
-        $existing = DB::table('comment_threads as t')
-            ->join('comment_thread_subscribers as sa', 'sa.thread_id', '=', 't.id')
-            ->join('comment_thread_subscribers as sb', 'sb.thread_id', '=', 't.id')
-            ->where('t.is_group', 0)
-            ->where('t.is_deleted', 0)
-            ->where('sa.account_id', $a)
-            ->where('sb.account_id', $b)
-            ->value('t.id');
-
-        if ($existing !== null) {
-            return (int) $existing;
-        }
-
-        $thread = new CommentThread;
-        $thread->forceFill([
-            'title' => '',
-            'description' => '',
-            'icon' => 0,
-            'created_by' => $a,
-            'created' => time(),
-            'is_group' => 0,
-            'is_muted' => 0,
-        ])->save();
-
-        foreach ([$a, $b] as $accountId) {
-            // Upserted: UNIQUE (thread_id, account_id).
-            CommentThreadSubscriber::query()->upsert(
-                [[
-                    'thread_id' => $thread->id,
-                    'account_id' => $accountId,
-                    'subscribed_at' => time(),
-                    'is_subscribed' => 1,
-                    'is_deleted' => 0,
-                    'is_admin' => 0,
-                ]],
-                uniqueBy: ['thread_id', 'account_id'],
-                update: ['is_subscribed', 'is_deleted'],
-            );
-        }
-
-        return (int) $thread->id;
+        return app(OneToOneThread::class)->for($a, $b);
     }
 
     /**
