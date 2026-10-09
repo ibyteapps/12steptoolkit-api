@@ -5,6 +5,7 @@ use App\Http\Controllers\Api\V1\Android\AppSettingsController;
 use App\Http\Controllers\Api\V1\Android\AuthController;
 use App\Http\Controllers\Api\V1\Android\CommentController;
 use App\Http\Controllers\Api\V1\Android\CountsController;
+use App\Http\Controllers\Api\V1\Android\DeleteAccountController;
 use App\Http\Controllers\Api\V1\Android\IconController;
 use App\Http\Controllers\Api\V1\Android\InstallSecretController;
 use App\Http\Controllers\Api\V1\Android\RecordController;
@@ -112,6 +113,14 @@ $android = function (): void {
          | accepted sponsorship in the right direction. See ReviewController.
          */
         Route::post('mark_reviewed.php', ReviewController::class);
+
+        /*
+         | Erasing one's own account. `18/deleteaccount.php` reads the id to
+         | erase out of the request body and is unauthenticated, so it erases
+         | whoever is named. This one has no such parameter.
+         */
+        Route::post('delete_account.php', DeleteAccountController::class)
+            ->middleware('throttle:legacy-login');
 
         foreach (RecordController::ENDPOINTS as $script => $call) {
             Route::post($script, [RecordController::class, $call]);
