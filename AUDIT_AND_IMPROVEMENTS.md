@@ -165,6 +165,47 @@ engine rather than by proxying RevenueCat on a request path.
 is retired. If the Play configuration is being touched for the Firebase key
 in §1.6, rotate this one in the same sitting.
 
+### 1.9 The newsletter scripts: a key, an injection and a list anybody can fill
+
+Three problems across two files, found while working out what to do with
+them.
+
+**`8/newsletter_subscribe.php`** carries a Sendy API key and a list id in the
+file, and takes the address to subscribe straight from the POST with no
+authentication:
+
+```php
+$sEmail = $_POST["sEmail"] ?? '';
+'api_key' => 'anU98jr1pVI0QS8NrCfN',
+```
+
+So anybody can add any address to the mailing list — the usual use for that
+is to point it at somebody else's inbox — and the key is one a Sendy install
+accepts for its whole API.
+
+**`8/getnewslettersubscribed.php`** opens a **second database**
+(`data_sendy2`, the Sendy install's own) with the same credentials and builds
+this:
+
+```php
+$sql = "select * from subscribers where email = '$email' and list = $list";
+```
+
+`$list` is not quoted, so it is an unescaped integer context in a SELECT
+against the subscriber table of a mailing list that is not even this
+application's. It is also an oracle: POST an address, learn whether it is
+subscribed to an A.A. mailing list. The only authentication in front of it is
+the v8 shared secret, which is printed in every App Store binary.
+
+**Not reproduced here.** Nothing in this application holds a Sendy key —
+`config/services.sendy` reads one from the environment — nothing opens a
+second database, and the v19 subscribe path takes the address from the signed
+account rather than from the body, so it can only ever subscribe the person
+asking.
+
+**Still open** on the legacy server: rotate the Sendy API key, and retire both
+scripts with the rest of `/8`.
+
 ---
 
 ## 2. Defects fixed in the port
@@ -267,9 +308,10 @@ after the first look like a duplicate of the first.
 | | |
 |---|---|
 | Rotate the Firebase admin key and purge it from git history | §1.6 |
+| Rotate the Sendy API key | §1.9 — it is in `8/newsletter_subscribe.php` |
 | Retire `/18`, `/7` and `aa/web/1` from the server | §1.1, §1.2 |
 | Apple-only billing scripts: `giftsubscription`, `getsponseepurchases`, `add_orderdata_sponsee` | superseded by the v19 pair, which is built; these matter only if iOS 1.6.6 is pointed here |
 | Push: `notification.php`, `notify.php`, `send_user_online_notification_to_all_friends.php` | |
-| `get_build_expiry.php`, `newsletter_subscribe.php` | |
+| `get_build_expiry.php` | unreferenced by every client — retire it rather than port it |
 | `/my`: the sponsor view and comments | the apps own these today |
 | `AllowEncodedSlashes NoDecode` on the server | or the encoded story URLs serve 200 instead of 301 |

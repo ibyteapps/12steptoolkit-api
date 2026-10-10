@@ -67,6 +67,14 @@ and `sw8` never written.
 **Account** — `get_user_account.php`, `update_account.php`,
 `update_account_details.php`.
 
+**Newsletter** — `newsletter_subscribe.php` and `newsletter_status.php`, over
+Sendy's HTTP API with the key in the environment. The address is the signed
+account's own, so unlike both legacy versions there is no parameter with which
+to subscribe somebody else; the `accounts.newsletter_subscribed` column is set
+only once Sendy has accepted the address, so the apps' nag and the list cannot
+drift apart. `8/getnewslettersubscribed.php` and `8/newsletter_subscribe.php`
+answer on the v8 path too, for addresses this server already holds. 11 tests.
+
 **Billing** — all four of v19's: `add_order.php`,
 `add_sponsee_order_and_gift.php`, `get_sponsee_gift_expiry.php`,
 `revcat_is_subscribed.php`. Covered: a gift recording the purchase, assigning
@@ -487,8 +495,10 @@ waiting on something outside this repository:
 
 * **`/sign-in/{token}`** and the store-required **account-deletion page** —
   both need the mail credentials that `/my` is already waiting on.
-* **The newsletter form** — `config/services.sendy` is read and nothing posts
-  to it yet.
+* **A newsletter form on the website** — the endpoints and
+  `Services/Newsletter/Sendy` exist; no page offers it yet, and
+  `SENDY_LIST_TOOLKIT` has to be set to the encrypted list id from Sendy's
+  "View all lists".
 * **Moving the document root** onto this application, which is what
   `config/site.serves_website` and `docs/WEBSITE_TAKEOVER.md` are for. Until
   that happens the static export answers `/` and nginx routes the four

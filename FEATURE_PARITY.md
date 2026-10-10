@@ -42,6 +42,7 @@ the set of things an endpoint can touch is the endpoint, not a parameter.
 | `deleteaccount.php` | `delete_account.php` |
 | `add_orderdata.php`, `add_orderdata_sponsee.php`, `giftsubscription.php` | `add_order.php`, `add_sponsee_order_and_gift.php` — the gift's two halves (record the purchase, assign a seat) became one idempotent call |
 | none | `get_sponsee_gift_expiry.php`, `revcat_is_subscribed.php` — both newer than /18 |
+| `newsletter_subscribe.php` (both trees) | `newsletter_subscribe.php`, `newsletter_status.php` — the address comes from the signed account, so there is no parameter to abuse |
 
 ### Legacy endpoints with no v19 equivalent yet
 
@@ -50,10 +51,10 @@ None of these is called by the Flutter client, so none blocks the app.
 | Script | What it does |
 |---|---|
 | `getsponseepurchases.php` | reading a sponsor's gift purchases — the query exists as `SponseeGifts::purchases()` and has no endpoint, because nothing asks |
-| `notification.php`, `notify.php` | push |
+| `getnewslettersubscribed.php` | answered on the v8 path, from Sendy's API rather than from its database, and only about an address this server holds |
+| `notification.php`, `notify.php` | push — replaced by `Services/Push`, which every endpoint that notifies now goes through |
 | `send_user_online_notification_to_all_friends.php` | presence push |
-| `get_build_expiry.php` | the beta kill switch, from the `builds` table |
-| `newsletter_subscribe.php` | mailing list |
+| `get_build_expiry.php` | the beta kill switch, from the `builds` table. **Nothing calls it** — not the shipping Android app, not the iOS one, not the new client. A retirement candidate rather than a gap |
 | `getrecorddetail.php`, `getlist_pagination_totals.php`, `getcounts_sponsee.php` | superseded by the per-collection reads |
 
 ---

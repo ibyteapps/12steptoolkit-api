@@ -9,6 +9,7 @@ use App\Http\Controllers\Api\V1\Android\CountsController;
 use App\Http\Controllers\Api\V1\Android\DeleteAccountController;
 use App\Http\Controllers\Api\V1\Android\IconController;
 use App\Http\Controllers\Api\V1\Android\InstallSecretController;
+use App\Http\Controllers\Api\V1\Android\NewsletterController;
 use App\Http\Controllers\Api\V1\Android\RecordController;
 use App\Http\Controllers\Api\V1\Android\ReminderController;
 use App\Http\Controllers\Api\V1\Android\ReviewController;
@@ -167,6 +168,18 @@ $android = function (): void {
          */
         foreach (BillingController::ENDPOINTS as $script => $call) {
             Route::post($script, [BillingController::class, $call]);
+        }
+
+        /*
+         | The mailing list. `newsletter_subscribe.php` exists on both legacy
+         | trees and both take the address from the body, unauthenticated —
+         | so either will subscribe somebody else. This one has no address
+         | parameter at all. `newsletter_status.php` is new: the old status
+         | script reads the Sendy install's own database with an injectable
+         | query. See AUDIT_AND_IMPROVEMENTS.md §1.9.
+         */
+        foreach (NewsletterController::ENDPOINTS as $script => $call) {
+            Route::post($script, [NewsletterController::class, $call]);
         }
 
         /*

@@ -58,6 +58,16 @@ return [
         'entitlement' => env('REVENUECAT_ENTITLEMENT', 'subscribed'),
     ],
 
+    /*
+     | Sendy, the mailing list.
+     |
+     | Nothing here is hard-coded, and that is the point: `8/newsletter_subscribe.php`
+     | carries its API key and its list id in the file (AUDIT_AND_IMPROVEMENTS.md
+     | §1.9), and `8/getnewslettersubscribed.php` opens the Sendy install's own
+     | database with the application's credentials. This talks to Sendy over its
+     | HTTP API, with a key from the environment, or — when the key is not set —
+     | does nothing and says so.
+     */
     'sendy' => [
         'url' => env('SENDY_URL'),
         'api_key' => env('SENDY_API_KEY'),
@@ -66,7 +76,16 @@ return [
             'sobriety_10_days' => env('SENDY_LIST_SOBRIETY_10_DAYS'),
             'silkworth_newsletter' => env('SENDY_LIST_SILKWORTH_NEWSLETTER'),
             'daily_reflections' => env('SENDY_LIST_DAILY_REFLECTIONS'),
+            /*
+             | The list both old apps subscribe to. iOS posts `list=5`, which is
+             | the row id inside Sendy's own database and not something its API
+             | accepts; the API wants the encrypted list id from "View all
+             | lists". So the posted number is ignored and this is used.
+             */
+            'toolkit' => env('SENDY_LIST_TOOLKIT'),
         ]),
+        'default_list' => env('SENDY_DEFAULT_LIST', 'toolkit'),
+        'timeout' => (int) env('SENDY_TIMEOUT', 10),
     ],
 
 ];

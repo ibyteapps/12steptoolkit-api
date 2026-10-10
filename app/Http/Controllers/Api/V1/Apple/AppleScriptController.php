@@ -3,11 +3,14 @@
 namespace App\Http\Controllers\Api\V1\Apple;
 
 use App\Http\Controllers\Controller;
+use App\Models\Account;
 use App\Services\Apple\AppleDelete;
 use App\Services\Apple\AppleList;
 use App\Services\Apple\AppleListRequest;
 use App\Services\Apple\AppleOutput;
 use App\Services\Apple\AppleRecordType;
+use App\Services\Newsletter\NewsletterStatus;
+use App\Services\Newsletter\Sendy;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Symfony\Component\HttpFoundation\Response;
@@ -68,6 +71,7 @@ class AppleScriptController extends Controller
     public function __construct(
         private readonly AppleList $list,
         private readonly AppleDelete $delete,
+        private readonly Sendy $sendy,
     ) {}
 
     public function __invoke(Request $request, string $script): Response
@@ -76,6 +80,8 @@ class AppleScriptController extends Controller
             'reachable.php' => AppleOutput::text('success'),
             'getlist.php' => $this->getList($request),
             'deleterecord.php' => $this->deleteRecord($request),
+            'getnewslettersubscribed.php' => $this->newsletterStatus($request),
+            'newsletter_subscribe.php' => $this->newsletterSubscribe($request),
 
             // `mysql_connect` / `mysql_query`, removed in PHP 7. These four
             // have been fatalling in production for years, which is why iOS
@@ -91,6 +97,92 @@ class AppleScriptController extends Controller
 
             default => $this->notBuilt($script),
         };
+    }
+
+    /**
+     * `getnewslettersubscribed.php` — one of three bare words.
+     *
+     * The old script opens the Sendy install's own database with this
+     * application's credentials and interpolates the posted address and list
+     * id into a SELECT against its `subscribers` table
+     * (AUDIT_AND_IMPROVEMENTS.md §1.9). This asks Sendy's API instead, and
+     * only about an address that belongs to an account here — so it cannot be
+     * used to ask whether a stranger's address is on an A.A. mailing list,
+     * which is what the old one answers for anybody holding the shared
+     * secret printed in every binary.
+     *
+     * The posted `list` is ignored: iOS sends `list=5`, which is a row id
+     * inside Sendy's database and not something its API accepts. See
+     * `config/services.sendy`.
+     */
+    private function newsletterStatus(Request $request): Response
+    {
+        $account = $this->accountForEmail($request);
+
+        if ($account === null) {
+            return AppleOutput::text(NewsletterStatus::NotSubscribed->value);
+        }
+
+        $status = $this->sendy->status((string) $account->email);
+
+        if ($status === NewsletterStatus::Unknown) {
+            // What this server knows, when Sendy cannot be asked.
+            $status = (int) $account->newsletter_subscribed === 1
+                ? NewsletterStatus::Subscribed
+                : NewsletterStatus::NotSubscribed;
+        }
+
+        return AppleOutput::text($status->value);
+    }
+
+    /**
+     * `newsletter_subscribe.php` — subscribe, and record it.
+     *
+     * The old script takes `sEmail` from the body and hands it to Sendy with
+     * a key written into the file, so it will subscribe anybody to anything.
+     * This subscribes only an address that belongs to an account here, which
+     * is the difference between a member joining a list and a stranger
+     * signing up somebody else.
+     */
+    private function newsletterSubscribe(Request $request): Response
+    {
+        $account = $this->accountForEmail($request);
+
+        if ($account === null || ! $this->sendy->configured()) {
+            return AppleOutput::error();
+        }
+
+        if (! $this->sendy->subscribe((string) $account->email, (string) ($account->nickname ?: ''))) {
+            return AppleOutput::error();
+        }
+
+        $account->forceFill(['newsletter_subscribed' => 1])->save();
+
+        // The old script echoes Sendy's own body, and the client only checks
+        // that the request did not error before showing "check your email".
+        return AppleOutput::text('1');
+    }
+
+    /**
+     * The account whose address this is, or null.
+     *
+     * Deliberately one lookup by address and no fallback: the v8 layer
+     * authenticates with a secret that is printed in every binary, so the
+     * most an endpoint here may do with an address it was handed is act on
+     * one that already exists.
+     */
+    private function accountForEmail(Request $request): ?Account
+    {
+        $email = trim((string) $request->input('email', $request->input('sEmail', '')));
+
+        if ($email === '' || ! filter_var($email, FILTER_VALIDATE_EMAIL)) {
+            return null;
+        }
+
+        return Account::query()
+            ->whereRaw('lower(email) = ?', [mb_strtolower($email)])
+            ->where('email', '!=', 'DELETED')
+            ->first();
     }
 
     /**
