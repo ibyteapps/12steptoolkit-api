@@ -6,37 +6,45 @@ use App\Models\Amend;
 use App\Models\Inventory;
 use App\Models\Night;
 use App\Models\Sponsor;
-use App\Services\Legacy\LegacyEnvelope;
+use App\Services\Push\DeviceTokens;
+use App\Services\Push\PushMessage;
+use App\Services\Push\PushSender;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 
 /**
  * A sponsor marking a sponsee's Step work as reviewed.
  *
- * ## What `18/reviewed.php` does
+ * ## Two live scripts, and this answers the newer one
+ *
+ * `18/reviewed.php` is
  *
  * ```php
  * $sql = "UPDATE $tablename SET reviewed=$reviewed WHERE id='$id'";
  * ```
  *
- * No account in the WHERE clause and no check that the caller sponsors
- * anybody, so any id marks any record reviewed — or un-reviewed — for any
- * member. `$reviewed` is interpolated rather than bound, so it is also an
- * injection point into an UPDATE statement. The table is chosen by a `step`
- * number posted by the caller.
+ * — no account in the WHERE clause, no check that the caller sponsors
+ * anybody, and the new value interpolated rather than bound.
  *
- * ## What this does
+ * `19/mark_as_reviewed.php` is the rewrite that shipped: prepared, with a
+ * fixed `item_type` → table map and a push to the member whose record it is.
+ * It still updates by row id alone, so any id still marks any record reviewed
+ * for any member.
  *
- * The caller is the signed-in account, from the signed request. The record
- * must belong to the sponsee named, and there must be an **accepted**
- * sponsorship from the caller to that sponsee — `status = Sponsor::ACCEPTED`,
- * in that direction, so a sponsee cannot mark their own sponsor's work
- * reviewed and a pending request is not a relationship yet.
+ * **This answers `mark_as_reviewed.php`** — the name, the fields and the
+ * response shape — because that is what the client calls and parses. It is
+ * one of the three endpoints in the whole surface with **no envelope**:
+ * `{success: 0|1, message, …}`, read by hand in
+ * `sponsorship_repository.dart`. Answering `{status, message, response}` here
+ * would be a 200 the client reads as a failure.
  *
- * `step` still chooses the table, because that is the contract the apps in
- * the field already speak, but it chooses from a fixed map rather than
- * naming a table, and a step that is not in the map is refused before any
- * query runs.
+ * ## What is added
+ *
+ * The record must belong to the member named, and there must be an
+ * **accepted** sponsorship from the caller to them — `status =
+ * Sponsor::ACCEPTED`, in that direction, so a sponsee cannot mark their
+ * sponsor's work reviewed and a pending request is not a relationship yet.
  *
  * ## `shared` and `reviewed`
  *
@@ -48,77 +56,181 @@ use Illuminate\Http\Request;
 class ReviewController extends Controller
 {
     /**
-     * The step numbers the apps send, and the table each one means.
+     * `item_type` → the table it means, as `19/mark_as_reviewed.php` maps it.
      *
-     * 4 and 5 are both the moral inventory — Step Four writes it, Step Five
-     * admits it — and 89 is the apps' shorthand for the amends pair.
+     * Four values, and the client refuses to send anything else before it
+     * asks. 4 and 10 are both the inventories table — Step Four's moral
+     * inventory and Step Ten's spot check — which is why the row's own
+     * `inventoryforstep` is checked below as well.
      */
     private const TABLES = [
         4 => Inventory::class,
-        5 => Inventory::class,
         10 => Inventory::class,
-        11 => Night::class,
-        8 => Amend::class,
-        9 => Amend::class,
         89 => Amend::class,
+        11 => Night::class,
     ];
+
+    /** The list name the client routes a tap on the push to. */
+    private const LISTS = [
+        Inventory::class => 'inventories',
+        Amend::class => 'amends',
+        Night::class => 'nights',
+    ];
+
+    public function __construct(
+        private readonly PushSender $push,
+        private readonly DeviceTokens $tokens,
+    ) {}
 
     public function __invoke(Request $request): JsonResponse
     {
         if ($refusal = $this->accountMismatch($request)) {
-            return $refusal;
+            return $this->fail('Forbidden', 403);
         }
 
         $sponsor = $this->account($request);
 
-        $step = (int) $request->input('step', 0);
-        $onlineId = (int) $request->input('online_id', $request->input('id', 0));
-        $sponseeId = (int) $request->input('sponsee_id', $request->input('userid', 0));
-        $reviewed = $request->boolean('reviewed') ? 1 : 0;
+        $itemType = (int) $request->input('item_type', 0);
+        $recordId = (int) $request->input('record_id', 0);
+        $friendId = (int) $request->input('friend_id', 0);
+        $reviewed = (int) $request->input('reviewed', -1);
 
-        $model = self::TABLES[$step] ?? null;
+        $model = self::TABLES[$itemType] ?? null;
 
         if ($model === null) {
-            return LegacyEnvelope::fail('Unknown step', 400);
+            return $this->fail('Unsupported item_type.');
         }
 
-        if ($onlineId <= 0 || $sponseeId <= 0) {
-            return LegacyEnvelope::fail('A record and a sponsee are required', 400);
+        if (! in_array($reviewed, [0, 1], true)) {
+            return $this->fail('Invalid reviewed (must be 0 or 1).');
         }
 
-        if ($sponseeId === (int) $sponsor->id) {
+        if ($recordId <= 0) {
+            return $this->fail('Invalid record_id.');
+        }
+
+        if ($friendId <= 0 || $friendId === (int) $sponsor->id) {
             // Marking your own work reviewed is not a thing a sponsor does,
             // and it is the shape an id-swapping client would take.
-            return LegacyEnvelope::fail('Forbidden', 403);
+            return $this->fail('Forbidden', 403);
         }
 
         $sponsors = Sponsor::query()
             ->where('sponsorid', $sponsor->id)
-            ->where('sponseeid', $sponseeId)
+            ->where('sponseeid', $friendId)
             ->where('status', Sponsor::ACCEPTED)
             ->exists();
 
         if (! $sponsors) {
-            return LegacyEnvelope::fail('Forbidden', 403);
+            return $this->fail('Forbidden', 403);
         }
 
-        $query = $model::query()->ownedBy($sponseeId)->whereKey($onlineId);
+        $query = $model::query()->ownedBy($friendId)->whereKey($recordId);
 
         if ($model === Inventory::class) {
-            // A step number that means "inventory" still has to agree with the
-            // row: marking a Step Ten spot check from the Step Four screen
-            // would otherwise work.
-            $query->where('inventoryforstep', $step === 10 ? 10 : 4);
+            // A Step Ten spot check and a Step Four inventory are the same
+            // table and different screens, so the type has to agree with the
+            // row. Anything that is not a spot check counts as Four, because
+            // Step Five's inventories are Step Four's rows read again.
+            $itemType === 10
+                ? $query->where('inventoryforstep', 10)
+                : $query->where('inventoryforstep', '!=', 10);
         }
 
-        $updated = $query->update(['reviewed' => $reviewed]);
+        /*
+         | Read, then write, rather than writing and reading the affected-row
+         | count. The count is a driver's opinion — PDO's MySQL driver reports
+         | rows *changed*, so re-marking something already reviewed comes back
+         | as 0, while SQLite reports the row as updated — and the answer this
+         | endpoint gives should not depend on which database it is talking
+         | to. The live script reads the count and then issues an unscoped
+         | `SELECT COUNT(*) WHERE id = ?` to work out what 0 meant, which
+         | answers "that record exists" about anybody's record; this one asks
+         | through the same `ownedBy` scope, so the distinction is only ever
+         | drawn about a sponsee the caller already sponsors.
+         */
+        $record = $query->first();
 
-        if ($updated === 0) {
-            // Not found, or not theirs. The same answer either way, so this
-            // cannot be used to ask whether a record id exists.
-            return LegacyEnvelope::fail('Record not found', 404);
+        if ($record === null) {
+            return $this->fail('Record not found.', 404, [
+                'updated' => 0,
+                'record_id' => $recordId,
+                'item_type' => $itemType,
+            ]);
         }
 
-        return LegacyEnvelope::ok(['reviewed' => $reviewed]);
+        if ((int) $record->getRawOriginal('reviewed') === $reviewed) {
+            return $this->ok('No change (already in requested state).', [
+                'updated' => 0,
+                'record_id' => $recordId,
+                'item_type' => $itemType,
+                'reviewed' => $reviewed,
+                'notified' => 0,
+            ]);
+        }
+
+        $record->forceFill(['reviewed' => $reviewed])->save();
+
+        return $this->ok('Updated successfully.', [
+            'updated' => 1,
+            'record_id' => $recordId,
+            'item_type' => $itemType,
+            'reviewed' => $reviewed,
+            'notified' => $this->tell($friendId, $recordId, $itemType, $reviewed, self::LISTS[$model]),
+        ]);
+    }
+
+    /**
+     * Tell the member their sponsor has read it.
+     *
+     * `ITEM_REVIEWED` is what both clients know. `list_type` and `record_id`
+     * are what turn a tap into the record itself rather than a refresh — the
+     * live script sends neither, so a tap there lands nowhere in particular.
+     */
+    private function tell(int $memberId, int $recordId, int $itemType, int $reviewed, string $list): int
+    {
+        $tokens = $this->tokens->for($memberId);
+
+        if ($tokens === [] || $reviewed !== 1) {
+            // Un-reviewing is a correction, not news.
+            return 0;
+        }
+
+        try {
+            return $this->push->send($tokens, new PushMessage(
+                title: 'Your sponsor',
+                body: 'has read your Step work',
+                data: [
+                    'table' => 'ITEM_REVIEWED',
+                    'record_id' => (string) $recordId,
+                    'item_type' => (string) $itemType,
+                    'reviewed' => (string) $reviewed,
+                    'list_type' => $list,
+                    'type' => $list,
+                ],
+            ));
+        } catch (\Throwable $e) {
+            // The record is marked. A dead token must not undo that.
+            Log::warning('review push failed', ['reason' => $e->getMessage()]);
+
+            return 0;
+        }
+    }
+
+    /**
+     * `{success: 1, message, …}`.
+     *
+     * No envelope, deliberately: `mark_as_reviewed.php` is one of the three
+     * endpoints that does not use one, and the client reads `success` by
+     * hand.
+     */
+    private function ok(string $message, array $extra): JsonResponse
+    {
+        return response()->json(['success' => 1, 'message' => $message] + $extra);
+    }
+
+    private function fail(string $message, int $status = 400, array $extra = []): JsonResponse
+    {
+        return response()->json(['success' => 0, 'message' => $message] + $extra, $status);
     }
 }

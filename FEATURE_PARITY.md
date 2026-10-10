@@ -38,7 +38,7 @@ the set of things an endpoint can touch is the endpoint, not a parameter.
 | `getserversettings.php` | `get_app_settings.php` |
 | `comment.php` | `comment_add_update`, `get_comments`, `get_comment_threads`, `get_step_comments`, `comment_star`, `comment_update_receipt`, `update_thread_subscriber` |
 | `sponsorship.php`, `get_sponsees.php` | `get_friends`, `get_one_friend`, `update_sponsors`, `send_chat_request`, `fetch_sponsor_ids` |
-| `reviewed.php` | `mark_reviewed.php` |
+| `reviewed.php` | `mark_as_reviewed.php` — the v19 name, the v19 fields (`record_id`, `item_type`, `friend_id`) and its envelope-less `{success: 0\|1}` body, because that is what the client sends and reads |
 | `deleteaccount.php` | `delete_account.php` |
 | `add_orderdata.php`, `add_orderdata_sponsee.php`, `giftsubscription.php` | `add_order.php`, `add_sponsee_order_and_gift.php` — the gift's two halves (record the purchase, assign a seat) became one idempotent call |
 | none | `get_sponsee_gift_expiry.php`, `revcat_is_subscribed.php` — both newer than /18 |

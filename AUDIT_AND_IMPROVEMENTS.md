@@ -88,8 +88,19 @@ $sql = "UPDATE $tablename SET reviewed=$reviewed WHERE id='$id'";
 No account, no check that the caller sponsors anybody, and `$reviewed`
 interpolated into an UPDATE.
 
-**Status:** replaced by `19/mark_reviewed.php`, which requires an accepted
-sponsorship in the right direction.
+There are two live versions. `19/mark_as_reviewed.php` is the rewrite that
+shipped — prepared statements, a fixed `item_type` map, a push to the member
+— and it keeps the part that matters: `UPDATE … WHERE id = ? LIMIT 1`, with
+no account clause. It also answers an unscoped `SELECT COUNT(*) WHERE id = ?`
+to tell "already reviewed" from "no such record", which is a record-existence
+oracle for anybody holding an id.
+
+**Status:** replaced. This application answers `mark_as_reviewed.php` — the
+same name, fields and envelope-less `{success: 0|1}` body, because that is
+what the client parses — and adds that the record must belong to the member
+named and that there must be an accepted sponsorship from the caller to them.
+The existence question is asked through the same ownership scope, so it can
+only ever be answered about a sponsee the caller already sponsors.
 
 ### 1.5 The iOS back-fill was public
 

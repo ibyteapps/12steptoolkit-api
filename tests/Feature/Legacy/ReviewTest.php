@@ -7,6 +7,8 @@ use App\Models\Inventory;
 use App\Models\Night;
 use App\Models\Sponsor;
 use App\Services\Legacy\LegacyJwt;
+use App\Services\Push\PushMessage;
+use App\Services\Push\PushSender;
 
 use function Tests\Support\signAs;
 
@@ -16,8 +18,14 @@ use function Tests\Support\signAs;
  |     UPDATE $tablename SET reviewed=$reviewed WHERE id='$id'
  |
  | — no account, no sponsorship check, and the new value interpolated into the
- | statement. Any id marked any record reviewed for any member. These tests
- | are mostly about the cases that one would have allowed.
+ | statement. `19/mark_as_reviewed.php` binds the value and keeps the rest:
+ | still `WHERE id = ?` alone. Any id marks any record reviewed for any
+ | member. These tests are mostly about the cases that would have allowed.
+ |
+ | They also pin the contract, which is not this application's to choose:
+ | the script name, the four `item_type` values, the field spellings and the
+ | envelope-less `{success: 0|1}` body are what `sponsorship_repository.dart`
+ | sends and reads.
  */
 
 beforeEach(function () {
@@ -64,12 +72,12 @@ beforeEach(function () {
     $this->strangers->save();
 });
 
-$review = fn (object $t, array $fields) => signAs($t, '/api/v1/android/19/mark_reviewed.php', $fields);
+$review = fn (object $t, array $fields) => signAs($t, '/api/v1/android/19/mark_as_reviewed.php', $fields);
 
 it('lets a sponsor mark a sponsee\'s inventory reviewed', function () use ($review) {
     $review($this, [
-        'step' => 4, 'online_id' => $this->inventory->id,
-        'sponsee_id' => $this->sponsee->id, 'reviewed' => 1,
+        'item_type' => 4, 'record_id' => $this->inventory->id,
+        'friend_id' => $this->sponsee->id, 'reviewed' => 1,
     ])->assertOk();
 
     expect((int) $this->inventory->fresh()->getRawOriginal('reviewed'))->toBe(1);
@@ -77,8 +85,8 @@ it('lets a sponsor mark a sponsee\'s inventory reviewed', function () use ($revi
 
 it('refuses a record belonging to somebody they do not sponsor', function () use ($review) {
     $review($this, [
-        'step' => 4, 'online_id' => $this->strangers->id,
-        'sponsee_id' => $this->stranger->id, 'reviewed' => 1,
+        'item_type' => 4, 'record_id' => $this->strangers->id,
+        'friend_id' => $this->stranger->id, 'reviewed' => 1,
     ])->assertForbidden();
 
     expect((int) $this->strangers->fresh()->getRawOriginal('reviewed'))->toBe(0);
@@ -90,8 +98,8 @@ it('refuses a record belonging to somebody they do not sponsor', function () use
  */
 it('refuses a record that is not the named sponsee\'s', function () use ($review) {
     $review($this, [
-        'step' => 4, 'online_id' => $this->strangers->id,
-        'sponsee_id' => $this->sponsee->id, 'reviewed' => 1,
+        'item_type' => 4, 'record_id' => $this->strangers->id,
+        'friend_id' => $this->sponsee->id, 'reviewed' => 1,
     ])->assertNotFound();
 
     expect((int) $this->strangers->fresh()->getRawOriginal('reviewed'))->toBe(0);
@@ -101,8 +109,8 @@ it('refuses while the sponsorship is only pending', function () use ($review) {
     Sponsor::query()->where('sponseeid', $this->sponsee->id)->update(['status' => Sponsor::PENDING]);
 
     $review($this, [
-        'step' => 4, 'online_id' => $this->inventory->id,
-        'sponsee_id' => $this->sponsee->id, 'reviewed' => 1,
+        'item_type' => 4, 'record_id' => $this->inventory->id,
+        'friend_id' => $this->sponsee->id, 'reviewed' => 1,
     ])->assertForbidden();
 });
 
@@ -118,8 +126,8 @@ it('will not work in the sponsee to sponsor direction', function () use ($review
     $mine->save();
 
     $review($this, [
-        'step' => 4, 'online_id' => $mine->id,
-        'sponsee_id' => $this->sponsor->id, 'reviewed' => 1,
+        'item_type' => 4, 'record_id' => $mine->id,
+        'friend_id' => $this->sponsor->id, 'reviewed' => 1,
     ])->assertForbidden();
 });
 
@@ -131,23 +139,54 @@ it('will not mark a spot check from the Step Four screen', function () use ($rev
     $spot->save();
 
     $review($this, [
-        'step' => 4, 'online_id' => $spot->id,
-        'sponsee_id' => $this->sponsee->id, 'reviewed' => 1,
+        'item_type' => 4, 'record_id' => $spot->id,
+        'friend_id' => $this->sponsee->id, 'reviewed' => 1,
     ])->assertNotFound();
 
     $review($this, [
-        'step' => 10, 'online_id' => $spot->id,
-        'sponsee_id' => $this->sponsee->id, 'reviewed' => 1,
+        'item_type' => 10, 'record_id' => $spot->id,
+        'friend_id' => $this->sponsee->id, 'reviewed' => 1,
     ])->assertOk();
 
     expect((int) $spot->fresh()->getRawOriginal('reviewed'))->toBe(1);
 });
 
-it('refuses a step it does not recognise before touching the database', function () use ($review) {
+it('refuses an item_type it does not recognise before touching the database', function () use ($review) {
     $review($this, [
-        'step' => 99, 'online_id' => $this->inventory->id,
-        'sponsee_id' => $this->sponsee->id, 'reviewed' => 1,
-    ])->assertStatus(400);
+        'item_type' => 99, 'record_id' => $this->inventory->id,
+        'friend_id' => $this->sponsee->id, 'reviewed' => 1,
+    ])->assertStatus(400)->assertJsonPath('success', 0);
+});
+
+/*
+ | The contract the client reads, which is not this application's to choose:
+ | `mark_as_reviewed.php` is one of the three endpoints with no envelope, and
+ | `sponsorship_repository.dart` reads `success` by hand. A `{status, message,
+ | response}` body here is a 200 the client takes for a failure.
+ */
+it('answers {success: 1} and not the envelope', function () use ($review) {
+    $review($this, [
+        'item_type' => 4, 'record_id' => $this->inventory->id,
+        'friend_id' => $this->sponsee->id, 'reviewed' => 1,
+    ])->assertOk()
+        ->assertJsonPath('success', 1)
+        ->assertJsonPath('updated', 1)
+        ->assertJsonPath('record_id', $this->inventory->id)
+        ->assertJsonPath('item_type', 4)
+        ->assertJsonMissingPath('status')
+        ->assertJsonMissingPath('response');
+});
+
+it('says so without writing when it is already in that state', function () use ($review) {
+    $this->inventory->forceFill(['reviewed' => 1])->save();
+
+    $review($this, [
+        'item_type' => 4, 'record_id' => $this->inventory->id,
+        'friend_id' => $this->sponsee->id, 'reviewed' => 1,
+    ])->assertOk()
+        ->assertJsonPath('success', 1)
+        ->assertJsonPath('updated', 0)
+        ->assertJsonPath('notified', 0);
 });
 
 it('marks nights and amends too, and can unmark', function () use ($review) {
@@ -162,13 +201,13 @@ it('marks nights and amends too, and can unmark', function () use ($review) {
     ]);
     $amend->save();
 
-    $review($this, ['step' => 11, 'online_id' => $night->id, 'sponsee_id' => $this->sponsee->id, 'reviewed' => 1])->assertOk();
-    $review($this, ['step' => 89, 'online_id' => $amend->id, 'sponsee_id' => $this->sponsee->id, 'reviewed' => 1])->assertOk();
+    $review($this, ['item_type' => 11, 'record_id' => $night->id, 'friend_id' => $this->sponsee->id, 'reviewed' => 1])->assertOk();
+    $review($this, ['item_type' => 89, 'record_id' => $amend->id, 'friend_id' => $this->sponsee->id, 'reviewed' => 1])->assertOk();
 
     expect((int) $night->fresh()->getRawOriginal('reviewed'))->toBe(1)
         ->and((int) $amend->fresh()->getRawOriginal('reviewed'))->toBe(1);
 
-    $review($this, ['step' => 11, 'online_id' => $night->id, 'sponsee_id' => $this->sponsee->id, 'reviewed' => 0])->assertOk();
+    $review($this, ['item_type' => 11, 'record_id' => $night->id, 'friend_id' => $this->sponsee->id, 'reviewed' => 0])->assertOk();
 
     expect((int) $night->fresh()->getRawOriginal('reviewed'))->toBe(0);
 });
@@ -182,9 +221,69 @@ it('does not care which way the request originally went', function () use ($revi
         ->update(['relationship_direction' => Sponsor::SPONSEE_TO_SPONSOR]);
 
     $review($this, [
-        'step' => 4, 'online_id' => $this->inventory->id,
-        'sponsee_id' => $this->sponsee->id, 'reviewed' => 1,
+        'item_type' => 4, 'record_id' => $this->inventory->id,
+        'friend_id' => $this->sponsee->id, 'reviewed' => 1,
     ])->assertOk();
 
     expect((int) $this->inventory->fresh()->getRawOriginal('reviewed'))->toBe(1);
+});
+
+/*
+ | The push is how the sponsee finds out, and both clients route it on
+ | `data['table']` — an unknown or missing value is `IgnoreLink`. The live
+ | script sends `record_id`, `item_type` and `reviewed`; `list_type` is added
+ | so that a tap opens the record rather than refreshing a list, which is
+ | what `PushRouter` does with it.
+ */
+it('tells the sponsee, with the keys their app routes on', function () use ($review) {
+    $sender = new class implements PushSender
+    {
+        /** @var array<int, PushMessage> */
+        public array $sent = [];
+
+        public function send(array $tokens, PushMessage $message): int
+        {
+            $this->sent[] = $message;
+
+            return count($tokens);
+        }
+    };
+    $this->app->instance(PushSender::class, $sender);
+    $this->sponsee->forceFill(['fcm_token' => 'sponsee-device'])->save();
+
+    $review($this, [
+        'item_type' => 4, 'record_id' => $this->inventory->id,
+        'friend_id' => $this->sponsee->id, 'reviewed' => 1,
+    ])->assertOk()->assertJsonPath('notified', 1);
+
+    expect($sender->sent)->toHaveCount(1)
+        ->and($sender->sent[0]->table())->toBe('ITEM_REVIEWED')
+        ->and($sender->sent[0]->data['record_id'])->toBe((string) $this->inventory->id)
+        ->and($sender->sent[0]->data['list_type'])->toBe('inventories');
+});
+
+it('does not announce an un-review', function () use ($review) {
+    $sender = new class implements PushSender
+    {
+        /** @var array<int, PushMessage> */
+        public array $sent = [];
+
+        public function send(array $tokens, PushMessage $message): int
+        {
+            $this->sent[] = $message;
+
+            return count($tokens);
+        }
+    };
+    $this->app->instance(PushSender::class, $sender);
+    $this->sponsee->forceFill(['fcm_token' => 'sponsee-device'])->save();
+    $this->inventory->forceFill(['reviewed' => 1])->save();
+
+    // Taking it back is a correction, not news.
+    $review($this, [
+        'item_type' => 4, 'record_id' => $this->inventory->id,
+        'friend_id' => $this->sponsee->id, 'reviewed' => 0,
+    ])->assertOk()->assertJsonPath('notified', 0);
+
+    expect($sender->sent)->toBeEmpty();
 });

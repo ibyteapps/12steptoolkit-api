@@ -110,12 +110,16 @@ $android = function (): void {
         Route::post('get_counts.php', CountsController::class);
 
         /*
-         | A sponsor marking a sponsee's Step work reviewed. `18/reviewed.php`
-         | updates by row id with no account and no sponsorship check, and
-         | interpolates the new value into the UPDATE; this one requires an
-         | accepted sponsorship in the right direction. See ReviewController.
+         | A sponsor marking a sponsee's Step work reviewed. Both live
+         | versions update by row id alone — `18/reviewed.php` interpolating
+         | the new value, `19/mark_as_reviewed.php` binding it — so any id
+         | marks any record reviewed for any member. This one requires an
+         | accepted sponsorship in the right direction.
+         |
+         | It is also one of the three endpoints with no envelope: the client
+         | reads `{success: 0|1}` by hand. See ReviewController.
          */
-        Route::post('mark_reviewed.php', ReviewController::class);
+        Route::post('mark_as_reviewed.php', ReviewController::class);
 
         /*
          | Erasing one's own account. `18/deleteaccount.php` reads the id to
