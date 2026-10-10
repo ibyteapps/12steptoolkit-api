@@ -271,6 +271,5 @@ after the first look like a duplicate of the first.
 | Apple-only billing scripts: `giftsubscription`, `getsponseepurchases`, `add_orderdata_sponsee` | superseded by the v19 pair, which is built; these matter only if iOS 1.6.6 is pointed here |
 | Push: `notification.php`, `notify.php`, `send_user_online_notification_to_all_friends.php` | |
 | `get_build_expiry.php`, `newsletter_subscribe.php` | |
-| The website contact form writing to `support_tickets` | needs a rate limit and a honeypot decided |
 | `/my`: the sponsor view and comments | the apps own these today |
 | `AllowEncodedSlashes NoDecode` on the server | or the encoded story URLs serve 200 instead of 301 |

@@ -272,6 +272,29 @@ which page and which field.
   first time this application meets the real database. Exit code 1 on any
   failure, so it can be the body of a monitor.
 
+### The website, and the member area
+
+The public site is served by this application: 169 URLs — the home page, the
+blog, the whole A.A. literature library, the legal pages and the contact page
+— with each page's title and description pinned per URL against the
+production build, the 27 redirects, `sitemap.xml`, `robots.txt` and the
+JSON-LD assembled in one place so no page can describe a breadcrumb trail it
+does not show. `docs/WEBSITE_TAKEOVER.md` is the inventory;
+`config/site.serves_website` is still **false**, because the document root is
+the static export and nginx routes four prefixes here — moving it is a
+separate decision with its own checklist.
+
+The contact page writes `support_tickets`, which is the queue the console
+already answers, so a message from the website and a message from the app
+land in the same place. No session and therefore no CSRF token (the site
+routes carry no cookie, deliberately); the defences are a honeypot, an
+hour-signed token from `Services/Site/ContactToken` and a rate limit of five
+an hour per address. No address and no user agent is stored. 12 tests.
+
+`/my` is the member area that replaces `web.12steptoolkit.com`: email and
+4-digit-code sign-in, and read, write and delete across the seven record
+types, in Blade, with no Tailwind and no build step.
+
 ### The rest
 
 `/api/v2/health`. `ApiExceptionRenderer` with every content column in
@@ -457,12 +480,19 @@ everything in that list: counts and dates and sync state, never content.
   it was: `billing:check` already proves the catalogue calls work and reports
   what each store holds, so this is the formatting rather than the plumbing.
 
-### 3.5 The website layer
+### 3.5 The website layer, the rest of it
 
-`routes/site.php` holds one placeholder. The pages that need a server —
-`/sign-in/{token}` and the store-required account-deletion page — are not built.
-12steptoolkit.com stays a Next.js static export in `../Website`; this
-application serves only what an export cannot.
+The site itself is built (§1). What is left is small and each piece is
+waiting on something outside this repository:
+
+* **`/sign-in/{token}`** and the store-required **account-deletion page** —
+  both need the mail credentials that `/my` is already waiting on.
+* **The newsletter form** — `config/services.sendy` is read and nothing posts
+  to it yet.
+* **Moving the document root** onto this application, which is what
+  `config/site.serves_website` and `docs/WEBSITE_TAKEOVER.md` are for. Until
+  that happens the static export answers `/` and nginx routes the four
+  prefixes here.
 
 ---
 

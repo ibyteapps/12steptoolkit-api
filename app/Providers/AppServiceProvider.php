@@ -125,5 +125,20 @@ class AppServiceProvider extends ServiceProvider
             Limit::perMinutes(10, 8)->by(mb_strtolower((string) $r->input('email')).'|'.$r->ip()),
             Limit::perMinutes(10, 30)->by('ip:'.$r->ip()),
         ]);
+
+        /*
+         | The website's contact form: a public, unauthenticated write. Both
+         | halves are needed — the address limit stops one person sending the
+         | same thing forty times while they are upset, which is a real
+         | pattern and not an attack; the address-wide one stops a robot
+         | working through a list.
+         |
+         | Generous on purpose. Somebody whose subscription has gone wrong
+         | should not meet a wall on their third attempt to tell us.
+         */
+        RateLimiter::for('site-contact', fn (Request $r) => [
+            Limit::perHour(5)->by('contact:'.mb_strtolower(trim((string) $r->input('email')))),
+            Limit::perHour(20)->by('contact-ip:'.$r->ip()),
+        ]);
     }
 }

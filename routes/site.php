@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Site\BlogController;
+use App\Http\Controllers\Site\ContactController;
 use App\Http\Controllers\Site\HomeController;
 use App\Http\Controllers\Site\LiteratureController;
 use App\Http\Controllers\Site\SitemapController;
@@ -48,8 +49,15 @@ Route::get('/', HomeController::class)->name('site.home');
 Route::view('privacy', 'site.pages.privacy')->name('site.privacy');
 Route::view('terms', 'site.pages.terms')->name('site.terms');
 Route::view('get-app', 'site.pages.get-app')->name('site.get-app');
-Route::view('contacts', 'site.pages.contacts', ['email' => config('toolkit.support.email', 'support@12steptoolkit.com')])
-    ->name('site.contacts');
+/*
+| The one page on the public site that writes to the database. The POST has a
+| rate limit; the page itself must not, or a shared office address loses the
+| contact page for everybody in it.
+*/
+Route::get('contacts', [ContactController::class, 'show'])->name('site.contacts');
+Route::post('contacts', [ContactController::class, 'store'])
+    ->middleware('throttle:site-contact')
+    ->name('site.contacts.send');
 
 Route::get('sitemap.xml', [SitemapController::class, 'sitemap'])->name('site.sitemap');
 Route::get('robots.txt', [SitemapController::class, 'robots'])->name('site.robots');
