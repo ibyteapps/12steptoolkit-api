@@ -12,11 +12,17 @@ use App\Models\CommentThread;
 use App\Models\CommentThreadSubscriber;
 use App\Models\ReportedUser;
 use App\Services\Chat\CommentVisibility;
+use App\Services\Chat\ThreadAudience;
 use App\Services\Legacy\LegacyEnvelope;
+use App\Services\Push\DeviceTokens;
+use App\Services\Push\PushMessage;
+use App\Services\Push\PushSender;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 
 /**
  * Comments, chat threads, receipts and blocking.
@@ -61,12 +67,18 @@ class CommentController extends Controller
         'comment_star.php' => 'star',
         'comment_update_receipt.php' => 'receipt',
         'update_thread_subscriber.php' => 'updateSubscriber',
+        'update_is_typing.php' => 'typing',
         'block_report_user.php' => 'blockOrReport',
         'unblock_user.php' => 'unblock',
         'get_blocked_users.php' => 'blockedUsers',
     ];
 
-    public function __construct(private readonly CommentVisibility $visibility) {}
+    public function __construct(
+        private readonly CommentVisibility $visibility,
+        private readonly ThreadAudience $audience,
+        private readonly PushSender $push,
+        private readonly DeviceTokens $tokens,
+    ) {}
 
     // ---------------------------------------------------------------- reads
 
@@ -395,6 +407,84 @@ class CommentController extends Controller
             ['comment_id' => $commentId, 'time_delivered' => $delivered, 'time_read' => $read],
             'Receipt updated',
         );
+    }
+
+    /**
+     * `update_is_typing.php` — "somebody is writing".
+     *
+     * The live script takes `account_id` from the body and updates
+     * `comment_thread_subscribers` by `(thread_id, account_id)` with no check
+     * that the caller is either of them, so anybody could set anybody's
+     * typing flag in anybody's thread — and then have the server push it to
+     * that thread. Here the account is the signed one and it has to be a
+     * member of the thread.
+     *
+     * The push is **silent**, which it has to be: a typing indicator that
+     * arrives in the notification shade is not a typing indicator. It also
+     * goes to people who have muted the thread, because muting is about
+     * being interrupted and this draws on a screen somebody is already
+     * looking at. {@see ThreadAudience}.
+     */
+    public function typing(Request $request): JsonResponse
+    {
+        if ($refusal = $this->accountMismatch($request)) {
+            return $refusal;
+        }
+
+        $me = (int) $this->account($request)->id;
+        $threadId = (int) $request->input('thread_id', 0);
+        $isTyping = $request->boolean('is_typing') ? 1 : 0;
+
+        $membership = CommentThreadSubscriber::query()
+            ->where('thread_id', $threadId)
+            ->where('account_id', $me)
+            ->where('is_deleted', 0)
+            ->first();
+
+        if ($membership === null) {
+            return LegacyEnvelope::fail('Forbidden', 403);
+        }
+
+        $now = now();
+
+        $membership->forceFill($isTyping === 1
+            ? ['is_typing' => 1, 'last_typing_at' => $now]
+            : ['is_typing' => 0],
+        )->save();
+
+        $this->announceTyping($threadId, $me, $isTyping, $now);
+
+        return LegacyEnvelope::ok([
+            'thread_id' => $threadId,
+            'account_id' => $me,
+            'is_typing' => $isTyping,
+        ]);
+    }
+
+    /** Tell the rest of the thread, quietly. */
+    private function announceTyping(int $threadId, int $me, int $isTyping, Carbon $now): void
+    {
+        foreach ($this->audience->for($threadId, $me, includeMuted: true) as $accountId) {
+            $tokens = $this->tokens->for($accountId);
+
+            if ($tokens === []) {
+                continue;
+            }
+
+            try {
+                $this->push->send($tokens, PushMessage::silent([
+                    'table' => 'comment_thread_subscribers',
+                    'action' => 'TYPING',
+                    'thread_id' => (string) $threadId,
+                    'account_id' => (string) $me,
+                    'is_typing' => (string) $isTyping,
+                    'last_typing_at' => $isTyping === 1 ? $now->toDateTimeString() : '',
+                ]));
+            } catch (\Throwable $e) {
+                // Nobody's conversation is worse off for a lost typing dot.
+                Log::warning('typing push failed', ['thread_id' => $threadId, 'reason' => $e->getMessage()]);
+            }
+        }
     }
 
     /**

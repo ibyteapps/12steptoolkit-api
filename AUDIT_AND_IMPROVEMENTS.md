@@ -217,6 +217,28 @@ asking.
 **Still open** on the legacy server: rotate the Sendy API key, and retire both
 scripts with the rest of `/8`.
 
+### 1.10 Two sponsorship endpoints that check nothing
+
+Found while working out why the client's sponsee screen had no endpoint to
+call.
+
+**`19/get_sponsee_steps_data.php`** takes `account_id` (the member) and
+`sponsor_id` (supposedly the caller) from the body and checks neither against
+the signed account. So anybody with a token can read any member's overview by
+posting an id: their sobriety date, how many amends they still owe, how much
+of their Step work is unreviewed. Posting somebody else's `sponsor_id` also
+reads that sponsor's comment counts with that member.
+
+**`19/update_is_typing.php`** takes `thread_id` and `account_id` from the
+body and updates `comment_thread_subscribers` by the pair, with no check that
+the caller is either of them — and then pushes it to the thread. Anybody
+could make anybody appear to be typing in a conversation they are not in.
+
+**Fixed here.** The caller is the signed account in both. The overview needs
+an accepted sponsorship to the member asked about (or for it to be the
+caller's own), `sponsor_id` is ignored, and the typing flag can only ever be
+the caller's own, in a thread they belong to.
+
 ---
 
 ## 2. Defects fixed in the port
@@ -293,6 +315,25 @@ block there shows every morning reminder twice. Its `reminder_id` is per
 *firing* rather than per subscription, because the new client ignores a repeat
 of the last id it handled, and a bare row id would have made every reminder
 after the first look like a duplicate of the first.
+
+### 2.8 "Written tonight" was false for everybody, every night
+
+`get_sponsee_steps_data.php` works out whether a sponsee has written their
+nightly inventory today with
+
+```sql
+MAX(CASE WHEN DATE(tstamp) = ? THEN 1 ELSE 0 END)
+```
+
+`nights.tstamp` is an epoch integer. `DATE(1760000000)` is not today's date
+and not anybody's, so the answer is always "no" — every sponsor sees every
+sponsee as having skipped tonight, every night. Here the day is a range in
+seconds.
+
+The same script sums `apologyowed - apologydone` across a member's spot
+checks, so a row where more apologies were made than were owed subtracts from
+another row's count and two of them can hide a third. It counts rows that
+still owe one.
 
 ---
 

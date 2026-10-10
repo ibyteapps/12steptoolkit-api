@@ -67,6 +67,18 @@ and `sw8` never written.
 **Account** — `get_user_account.php`, `update_account.php`,
 `update_account_details.php`.
 
+**Sponsorship** — `get_friends`, `get_one_friend`, `fetch_sponsor_ids`,
+`send_chat_request`, `update_sponsors`, `check_if_has_sponsor_or_old_device`,
+`mark_as_reviewed` and `get_sponsee_steps_data`. The last is the only endpoint
+in the application that answers about **another person's** records, which is
+why it answers in counts and never in content, and why it needs an accepted
+sponsorship to the member asked about.
+
+**Password reset** — `reset_password_for_email.php`, unauthenticated for the
+obvious reason and rate-limited, with the same sentence as its answer whether
+or not the address is registered. The link points at the page that is live
+today, which is configuration rather than a literal. 8 tests.
+
 **Newsletter** — `newsletter_subscribe.php` and `newsletter_status.php`, over
 Sendy's HTTP API with the key in the environment. The address is the signed
 account's own, so unlike both legacy versions there is no parameter with which

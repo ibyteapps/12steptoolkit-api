@@ -4,20 +4,38 @@ What the old system does, what this one does, and where the two differ on
 purpose. Generated against the route table and the legacy source, not from
 memory — rerun the counts with `php artisan route:list` if this looks stale.
 
-Counts as of the last update: **47** v19 endpoints, **8** `/my` routes,
+Counts as of the last update: **56** v19 endpoints, **8** `/my` routes,
 **169** indexed website URLs.
 
 ---
 
 ## 1. The app API
 
-The Flutter client names 26 scripts in `lib/core/network/endpoints.dart`.
-**All 26 are served.** That is the number that decides whether the app works;
-the legacy directory's size does not.
+The number that decides whether the app works is how many of the scripts the
+**client names** are served. An earlier version of this section counted the 26
+in `lib/core/network/endpoints.dart` and called it all of them. It is not:
+that file is `lib/core`'s, and four features keep their own lists —
+`community_endpoints.dart`, `subscription_api.dart`,
+`password_reset_channel.dart` and `sponsorship_repository.dart`. Across the
+whole client there are **51**.
 
-| Client calls | Served | Note |
+Counting the wrong file is how `mark_as_reviewed.php` was built under a name
+nobody calls, with fields nobody sends and an envelope the client reads as a
+failure. The count below is `grep -rhoE "'[a-z0-9_]+\.php'" lib/` against
+`php artisan route:list`, and rerunning it is how this stays true.
+
+| Client names | Served | Not served |
 |---|---|---|
-| 26 | 26 | `sync_account.php` is declared but has no call site — `endpoints.dart` says it "cannot be used" |
+| 51 | 47 | 4, none of them called |
+
+The four, and why each is a decision rather than a gap:
+
+| Script | Why not |
+|---|---|
+| `add_friend.php` | declared, never called. The client makes relationships through `send_chat_request.php` and `update_sponsors.php`, which are scoped to the people in them; the live `add_friend.php` inserts a sponsorship between any two ids it is handed |
+| `get_community_wall.php` | declared, never called. Unauthenticated server-side (`19/get_community_wall.php:8`) |
+| `get_sponsee_step_entries.php` | **was never deployed** — the Android client calls a URL that does not exist on the server either |
+| `sync_account.php` | declared, and `endpoints.dart` says it "cannot be used": it writes the whole `accounts` row, so a stale field overwrites a newer one. `update_account.php` writes one named column |
 
 ### v19 is not a rename of /18
 
@@ -40,6 +58,9 @@ the set of things an endpoint can touch is the endpoint, not a parameter.
 | `sponsorship.php`, `get_sponsees.php` | `get_friends`, `get_one_friend`, `update_sponsors`, `send_chat_request`, `fetch_sponsor_ids` |
 | `reviewed.php` | `mark_as_reviewed.php` — the v19 name, the v19 fields (`record_id`, `item_type`, `friend_id`) and its envelope-less `{success: 0\|1}` body, because that is what the client sends and reads |
 | `deleteaccount.php` | `delete_account.php` |
+| none | `get_sponsee_steps_data.php` — a sponsee's Step work in counts, never content. The live one takes both ids from the body and checks neither |
+| none | `update_is_typing.php` — the live one sets anybody's typing flag in anybody's thread |
+| none | `reset_password_for_email.php` — kept as it is, with a rate limit |
 | `add_orderdata.php`, `add_orderdata_sponsee.php`, `giftsubscription.php` | `add_order.php`, `add_sponsee_order_and_gift.php` — the gift's two halves (record the purchase, assign a seat) became one idempotent call |
 | none | `get_sponsee_gift_expiry.php`, `revcat_is_subscribed.php` — both newer than /18 |
 | `newsletter_subscribe.php` (both trees) | `newsletter_subscribe.php`, `newsletter_status.php` — the address comes from the signed account, so there is no parameter to abuse |

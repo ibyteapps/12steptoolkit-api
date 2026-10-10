@@ -7,9 +7,7 @@ use App\Models\Comment;
 use App\Services\Push\DeviceTokens;
 use App\Services\Push\PushMessage;
 use App\Services\Push\PushSender;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Schema;
 
 /**
  * Telling the other people in a thread that somebody has written.
@@ -33,12 +31,17 @@ use Illuminate\Support\Facades\Schema;
  *  * either side of a block, in both directions;
  *  * erased accounts, which the legacy deletion marks `email = 'DELETED'`
  *    rather than removing.
+ *
+ * That list lives in {@see ThreadAudience} now, because the typing indicator
+ * asks the same question and two copies of it would drift until one of them
+ * told somebody's blocked contact that they were typing.
  */
 class CommentNotifier
 {
     public function __construct(
         private readonly PushSender $push,
         private readonly DeviceTokens $tokens,
+        private readonly ThreadAudience $audience,
     ) {}
 
     /** @return int how many people were told */
@@ -53,7 +56,7 @@ class CommentNotifier
 
         $told = 0;
 
-        foreach ($this->recipients($threadId, $authorId) as $accountId) {
+        foreach ($this->audience->for($threadId, $authorId) as $accountId) {
             $tokens = $this->tokens->for($accountId);
 
             if ($tokens === []) {
@@ -103,41 +106,5 @@ class CommentNotifier
         $nickname = trim((string) $author->getAttribute('nickname'));
 
         return $nickname !== '' ? $nickname : 'Someone';
-    }
-
-    /** @return array<int, int> */
-    private function recipients(int $threadId, int $authorId): array
-    {
-        $ids = DB::table('comment_thread_subscribers as s')
-            ->join('accounts as a', 'a.id', '=', 's.account_id')
-            ->where('s.thread_id', $threadId)
-            ->where('s.account_id', '!=', $authorId)
-            ->where('s.is_subscribed', 1)
-            ->where('s.is_deleted', 0)
-            ->where('s.is_muted', 0)
-            ->where('a.email', '!=', 'DELETED')
-            ->pluck('s.account_id')
-            ->map(fn ($id): int => (int) $id)
-            ->all();
-
-        if ($ids === [] || ! Schema::hasTable('blocked_users')) {
-            return $ids;
-        }
-
-        $blocked = DB::table('blocked_users')
-            ->where('is_deleted', 0)
-            ->where(function ($q) use ($authorId, $ids): void {
-                $q->where(fn ($w) => $w->where('blocker_id', $authorId)->whereIn('blocked_id', $ids))
-                    ->orWhere(fn ($w) => $w->where('blocked_id', $authorId)->whereIn('blocker_id', $ids));
-            })
-            ->get(['blocker_id', 'blocked_id']);
-
-        $excluded = [];
-        foreach ($blocked as $row) {
-            $excluded[] = (int) $row->blocker_id;
-            $excluded[] = (int) $row->blocked_id;
-        }
-
-        return array_values(array_diff($ids, $excluded));
     }
 }

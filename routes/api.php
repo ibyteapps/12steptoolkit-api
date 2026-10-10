@@ -10,6 +10,7 @@ use App\Http\Controllers\Api\V1\Android\DeleteAccountController;
 use App\Http\Controllers\Api\V1\Android\IconController;
 use App\Http\Controllers\Api\V1\Android\InstallSecretController;
 use App\Http\Controllers\Api\V1\Android\NewsletterController;
+use App\Http\Controllers\Api\V1\Android\PasswordResetController;
 use App\Http\Controllers\Api\V1\Android\RecordController;
 use App\Http\Controllers\Api\V1\Android\ReminderController;
 use App\Http\Controllers\Api\V1\Android\ReviewController;
@@ -78,6 +79,15 @@ $android = function (): void {
 
     // Public by design: one global row of limits and ad timings.
     Route::match(['get', 'post'], 'get_app_settings.php', AppSettingsController::class);
+
+    /*
+    | "I have forgotten it". Unauthenticated for the obvious reason, and the
+    | answer is the same sentence whether or not the address is registered —
+    | anything else turns a login form into a way of asking whether somebody
+    | is in A.A. See PasswordResetController.
+    */
+    Route::post('reset_password_for_email.php', PasswordResetController::class)
+        ->middleware('throttle:legacy-login');
 
     // A token, but no signature yet — you cannot sign before you hold the key.
     Route::post('bootstrap_secret.php', InstallSecretController::class)

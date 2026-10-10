@@ -6,6 +6,7 @@ use App\Models\BlockedUser;
 use App\Models\Sponsor;
 use App\Services\Chat\OneToOneThread;
 use App\Services\Legacy\LegacyEnvelope;
+use App\Services\Sponsorship\SponseeOverview;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
@@ -43,6 +44,7 @@ class SponsorController extends Controller
         'send_chat_request.php' => 'requestChat',
         'update_sponsors.php' => 'update',
         'check_if_has_sponsor_or_old_device.php' => 'hasSponsor',
+        'get_sponsee_steps_data.php' => 'stepsData',
     ];
 
     // ---------------------------------------------------------------- reads
@@ -67,6 +69,54 @@ class SponsorController extends Controller
                 fn (Sponsor $s) => in_array((int) $s->status, Sponsor::VISIBLE, true)
             )),
         ], 'Fetched '.$rows->count().' relationship(s)');
+    }
+
+    /**
+     * `get_sponsee_steps_data.php` — a sponsee's Step work in numbers.
+     *
+     * The one endpoint in this family that answers about somebody else's
+     * records, which is why it answers in counts and never in content.
+     *
+     * The live script takes `account_id` and `sponsor_id` from the body and
+     * checks neither against the caller, so any signed-in person can read any
+     * member's overview — how long they have been sober, how many amends they
+     * still owe — by posting an id. Here the sponsor is the signed account,
+     * and there has to be an accepted sponsorship to the member asked about.
+     * Somebody asking about themselves is allowed: it is their own data.
+     */
+    public function stepsData(Request $request): JsonResponse
+    {
+        /*
+         | No `accountMismatch` here, and it is the one endpoint where that
+         | would be wrong: `account_id` on this script means the **sponsee**
+         | being asked about, not the caller. The caller is the token, as
+         | everywhere, and `sponsor_id` is ignored — the live script counts
+         | comments from whatever `sponsor_id` it is handed, which reads
+         | somebody else's conversation counts.
+         */
+        $me = (int) $this->account($request)->id;
+        $sponseeId = (int) $request->input('account_id', $request->input('sponsee_id', 0));
+
+        if ($sponseeId <= 0) {
+            return LegacyEnvelope::fail('Invalid account ID', 400, []);
+        }
+
+        if ($sponseeId !== $me) {
+            $sponsors = Sponsor::query()
+                ->where('sponsorid', $me)
+                ->where('sponseeid', $sponseeId)
+                ->where('status', Sponsor::ACCEPTED)
+                ->exists();
+
+            if (! $sponsors) {
+                return LegacyEnvelope::fail('Forbidden', 403, []);
+            }
+        }
+
+        return LegacyEnvelope::ok(
+            app(SponseeOverview::class)->for($sponseeId, $me),
+            'Overview fetched successfully',
+        );
     }
 
     /** `get_one_friend.php` — one person, if there is a relationship to justify it. */

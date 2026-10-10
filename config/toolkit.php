@@ -51,6 +51,22 @@ return [
         // Accounts the stores' reviewers use. Compared in constant time.
         'review_accounts' => array_values(array_filter(array_map('trim', explode(',', (string) env('REVIEW_ACCOUNTS', ''))))),
         'review_code' => (string) env('REVIEW_CODE', ''),
+
+        /*
+         | Password reset.
+         |
+         | The link points at the page that is live today — the legacy PHP
+         | app's own `/app/validate2/reset_password.php`, which stays where it
+         | is and keeps its own `/app/` location block in the nginx config.
+         | Reset links already in people's inboxes point there, which is the
+         | same reason `CanonicalUrl` leaves `/app/` alone.
+         |
+         | Thirty minutes, as the live script sets, and the code is 32 hex
+         | characters because `password_resets.reset_code` is `char(32)`.
+         */
+        'reset_url' => (string) env('PASSWORD_RESET_URL', 'https://www.12steptoolkit.com/app/validate2/reset_password.php'),
+        'reset_deep_link' => (string) env('PASSWORD_RESET_DEEP_LINK', 'https://www.12steptoolkit.com/app/reset'),
+        'reset_ttl_minutes' => (int) env('PASSWORD_RESET_TTL_MINUTES', 30),
     ],
 
     /*
