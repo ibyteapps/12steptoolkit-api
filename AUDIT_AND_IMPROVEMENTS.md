@@ -132,6 +132,39 @@ query failure returns the statement and the path.
 
 **Still open** on the legacy servers; ends with them.
 
+### 1.8 `revcat_is_subscribed.php` — a subscriber list, one id at a time
+
+Two things in one file, and it is the combination that matters:
+
+```php
+//require __DIR__ . '/db.php';
+$REVENUECAT_API_KEY = 'goog_…';
+$app_user_id = isset($_POST['account_id']) ? (int)$_POST['account_id'] : 0;
+```
+
+`db.php` is what turns the JWT and the HMAC on (`19/db.php:5-6`), and the
+include is commented out — so the script is unauthenticated. It then asks
+RevenueCat about whatever `account_id` the body carries, and `app_user_id` is
+`accounts.id`, which is sequential. The reply names the entitlement and its
+expiry date. So anybody who can reach the URL can walk the ids and read who
+is subscribed and until when.
+
+On the key itself: the `goog_` prefix is RevenueCat's **public SDK key**, not
+a secret REST key (`sk_…`), and a public key ships inside every installed
+Android binary — so writing it into this file did not expose anything that
+was not already public. Worth confirming in the RevenueCat dashboard rather
+than taking from the prefix. What is genuinely exposed is the *endpoint*.
+
+**Fixed here.** Nothing in this application hard-codes a key —
+`config/billing.php` reads `REVENUECAT_SECRET_KEY` from the environment — and
+the replacement, `BillingController::isSubscribed`, is signed, answers about
+the caller and nobody else, and answers from this server's own entitlement
+engine rather than by proxying RevenueCat on a request path.
+
+**Still open** on the legacy server: the script stays reachable until `/19`
+is retired. If the Play configuration is being touched for the Firebase key
+in §1.6, rotate this one in the same sitting.
+
 ---
 
 ## 2. Defects fixed in the port
@@ -186,6 +219,29 @@ search result — as `&amp;amp;`. It happened on the home page and again on the
 literature hub. A test now asserts no page double-escapes an entity in its
 head.
 
+### 2.7 Pushes the clients could not route — introduced here, not inherited
+
+This one was not carried across from the old code; it was written into the
+port and found while building the gift notification, and it is recorded here
+because every push this server sent was being thrown away by both apps.
+
+Both clients route on `data['table']`: the new one by `PushRouter.knownTables`,
+which answers `IgnoreLink('unknown_table')` for a value it does not know and
+`empty_payload` when the key is absent; the old one by the same string in its
+FCM service. Every live v19 script sends it — `['table' => 'COMMENTS']`,
+`['table' => 'SUBSCRIPTION_GIFTED']`, `['table' => 'REMINDER']`. The reminder
+sender and the comment notifier here sent `['type' => …]` instead, which both
+apps ignore.
+
+The same work settled what a reminder push may contain: it is now **data-only**,
+with no FCM `notification` block, because both clients compose and display
+reminders themselves — the new one suppressing the server's copy when the
+device has already armed a local reminder for that slot. A `notification`
+block there shows every morning reminder twice. Its `reminder_id` is per
+*firing* rather than per subscription, because the new client ignores a repeat
+of the last id it handled, and a bare row id would have made every reminder
+after the first look like a duplicate of the first.
+
 ---
 
 ## 3. Improvements made beyond parity
@@ -212,7 +268,7 @@ head.
 |---|---|
 | Rotate the Firebase admin key and purge it from git history | §1.6 |
 | Retire `/18`, `/7` and `aa/web/1` from the server | §1.1, §1.2 |
-| Billing endpoints: `giftsubscription`, `getsponseepurchases`, `add_orderdata_sponsee` | none called by the Flutter client yet |
+| Apple-only billing scripts: `giftsubscription`, `getsponseepurchases`, `add_orderdata_sponsee` | superseded by the v19 pair, which is built; these matter only if iOS 1.6.6 is pointed here |
 | Push: `notification.php`, `notify.php`, `send_user_online_notification_to_all_friends.php` | |
 | `get_build_expiry.php`, `newsletter_subscribe.php` | |
 | The website contact form writing to `support_tickets` | needs a rate limit and a honeypot decided |

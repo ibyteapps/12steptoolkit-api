@@ -3,6 +3,7 @@
 use App\Http\Controllers\Api\V1\Android\AccountController;
 use App\Http\Controllers\Api\V1\Android\AppSettingsController;
 use App\Http\Controllers\Api\V1\Android\AuthController;
+use App\Http\Controllers\Api\V1\Android\BillingController;
 use App\Http\Controllers\Api\V1\Android\CommentController;
 use App\Http\Controllers\Api\V1\Android\CountsController;
 use App\Http\Controllers\Api\V1\Android\DeleteAccountController;
@@ -154,6 +155,18 @@ $android = function (): void {
 
         foreach (ReminderController::ENDPOINTS as $script => $call) {
             Route::post($script, [ReminderController::class, $call]);
+        }
+
+        /*
+         | Receipts, gifted sponsee seats, and "am I subscribed?".
+         |
+         | All four are signed here. Three of the live four are too; the
+         | fourth, `revcat_is_subscribed.php`, has its `db.php` include
+         | commented out, so it is unauthenticated and will answer about any
+         | account id anybody posts. See BillingController.
+         */
+        foreach (BillingController::ENDPOINTS as $script => $call) {
+            Route::post($script, [BillingController::class, $call]);
         }
 
         /*

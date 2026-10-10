@@ -93,6 +93,12 @@ it('never puts the message in the notification', function () {
         ->and($message->body)->toBe('sent you a message')
         ->and($message->body)->not->toContain('Step Four')
         ->and(json_encode($message->data))->not->toContain('Step Four');
+
+    // And it is routable: both clients switch on `data['table']`, and a
+    // payload without it is `empty_payload` to the new one — delivered,
+    // dropped, and invisible from the server.
+    expect($message->table())->toBe('COMMENTS')
+        ->and($message->data['thread_id'])->toBe((string) $this->thread->id);
 });
 
 it('does not tell the author', function () {

@@ -54,17 +54,27 @@ it('keeps the console out of search results even once the website is indexable',
         ->assertHeader('X-Robots-Tag', 'noindex, nofollow');
 });
 
+/*
+ | These two read the config file's own text rather than `config()`, and the
+ | reason is that they are assertions about what SHIPS. Resolved config is
+ | whatever the machine running the suite happens to have in `.env` — a laptop
+ | serving the site at 127.0.0.1 sets both of these deliberately — so reading
+ | `config()` here tested the developer's environment and failed on it. The
+ | default in the file is the thing that reaches the server.
+ */
 it('does not claim to serve the website by default', function () {
     // The arrangement: 12steptoolkit.com's document root stays on the static
     // export and nginx routes three prefixes here. `deploy.sh` reads this to
     // decide whether `/` is its business to judge.
-    expect(config('site.serves_website'))->toBeFalse();
+    expect(file_get_contents(config_path('site.php')))
+        ->toMatch("/'serves_website' => \(bool\) env\('SITE_SERVES_WEBSITE', false\)/");
 });
 
 it('names the one host where being indexable is correct', function () {
     // deploy.sh reads this out of .env to decide whether `noindex` on this
     // deploy is correct or a mistake about to cost the site its rankings.
-    expect(config('site.website_host'))->toBe('12steptoolkit.com');
+    expect(file_get_contents(config_path('site.php')))
+        ->toMatch("/'website_host' => env\('SITE_WEBSITE_HOST', '12steptoolkit\.com'\)/");
 });
 
 /*

@@ -18,6 +18,13 @@ use Illuminate\Support\Facades\Schema;
  * Picking bumps the counters, which is what makes the rotation work. That is
  * a write on a read path, and it is why this is a class rather than a query
  * in the dispatcher.
+ *
+ * There is no title here, deliberately. A reminder is sent data-only and both
+ * clients write their own heading — the old one from its string resources,
+ * the new one from `NotificationCatalog` — so a title composed on the server
+ * would be carried across the world and thrown away. The body is sent because
+ * the old client does display it (`data['text']`), and because the rotation
+ * above is the whole point of the table.
  */
 class ReminderTexts
 {
@@ -26,17 +33,6 @@ class ReminderTexts
         ReminderSubscription::NIGHT => 'Time for your nightly inventory.',
         ReminderSubscription::HOURLY => 'A moment to check in with yourself.',
     ];
-
-    private const TITLES = [
-        ReminderSubscription::MORNING => 'Good morning',
-        ReminderSubscription::NIGHT => 'Before you turn in',
-        ReminderSubscription::HOURLY => '12 Step Toolkit',
-    ];
-
-    public function title(string $type): string
-    {
-        return self::TITLES[$type] ?? '12 Step Toolkit';
-    }
 
     public function body(string $type, string $language = 'en'): string
     {

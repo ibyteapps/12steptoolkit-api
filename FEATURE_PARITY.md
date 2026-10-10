@@ -40,6 +40,8 @@ the set of things an endpoint can touch is the endpoint, not a parameter.
 | `sponsorship.php`, `get_sponsees.php` | `get_friends`, `get_one_friend`, `update_sponsors`, `send_chat_request`, `fetch_sponsor_ids` |
 | `reviewed.php` | `mark_reviewed.php` |
 | `deleteaccount.php` | `delete_account.php` |
+| `add_orderdata.php`, `add_orderdata_sponsee.php`, `giftsubscription.php` | `add_order.php`, `add_sponsee_order_and_gift.php` — the gift's two halves (record the purchase, assign a seat) became one idempotent call |
+| none | `get_sponsee_gift_expiry.php`, `revcat_is_subscribed.php` — both newer than /18 |
 
 ### Legacy endpoints with no v19 equivalent yet
 
@@ -47,9 +49,7 @@ None of these is called by the Flutter client, so none blocks the app.
 
 | Script | What it does |
 |---|---|
-| `giftsubscription.php` | granting a subscription to a sponsee |
-| `getsponseepurchases.php` | reading a sponsee's purchases |
-| `add_orderdata_sponsee.php` | recording one |
+| `getsponseepurchases.php` | reading a sponsor's gift purchases — the query exists as `SponseeGifts::purchases()` and has no endpoint, because nothing asks |
 | `notification.php`, `notify.php` | push |
 | `send_user_online_notification_to_all_friends.php` | presence push |
 | `get_build_expiry.php` | the beta kill switch, from the `builds` table |
@@ -119,3 +119,28 @@ it is enforced rather than here:
 - **`comments.byid` in group threads survives account erasure.** Removing
   those would take content out of other people's conversations. The old
   script leaves them too.
+- **A gifted member keeps the longest gift, not the latest.**
+  `get_sponsee_gift_expiry.php` is `ORDER BY sou.id DESC LIMIT 1`, so somebody
+  holding a twelve-month gift who is then handed a three-month one is answered
+  with the three months. `SponseeGifts::accessUntil()` takes the latest expiry
+  across every seat held. Nothing may take away access another row still
+  grants — `docs/ENTITLEMENT_RULES.md`.
+- **A gift needs a connection, and the seat count comes from the row.** The
+  live script reads the buyer out of the POST body, so any stranger could
+  spend any sponsor's seats on any account id, and it takes the posted
+  `quantity` as the seat limit. Here the buyer is the signed account, the
+  limit is the stored `quantity`, and the recipient has to be somebody the
+  caller is connected to — `status IN (0, 1, 5, 6)`, which is exactly the set
+  `get_friends.php` returns, so gifting to a sponsor or a chat contact still
+  works as the Upgrade card offers it.
+- **A gift's term is resolved when it is bought, not when it is read.**
+  `months` is written on the order row; where a client sends none, the term is
+  read from the product name in the SKU (`annual` → 12, `quarterly` → 3) and
+  recorded. A purchase whose term cannot be worked out is refused rather than
+  stored, because `months <= 0` grants nothing and would be a payment for
+  nothing. The number in a SKU is **not** the term: `…annual_sponsee1` is
+  twelve months.
+- **`add_order.php` grants nothing.** It records a receipt in
+  `subscription_orders` for the audit trail. A client's word about a purchase
+  is not a verified receipt, and if writing there granted premium the paywall
+  would be a POST away. Access comes from `EntitlementService` only.

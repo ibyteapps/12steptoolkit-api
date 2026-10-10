@@ -45,11 +45,7 @@ class FcmPushSender implements PushSender
             try {
                 $response = Http::timeout((int) config('push.fcm.timeout', 10))
                     ->withToken($accessToken)
-                    ->post($url, ['message' => [
-                        'token' => $token,
-                        'notification' => ['title' => $message->title, 'body' => $message->body],
-                        'data' => $message->data,
-                    ]]);
+                    ->post($url, ['message' => $this->envelope($token, $message)]);
 
                 if ($response->successful()) {
                     $accepted++;
@@ -68,6 +64,37 @@ class FcmPushSender implements PushSender
         }
 
         return $accepted;
+    }
+
+    /**
+     * The `message` object FCM v1 wants, for one token.
+     *
+     * A silent message carries no `notification` block, and says so on both
+     * platforms rather than hoping: Android needs `priority: high` for a
+     * data-only message to wake a dozing app, and APNs needs
+     * `content-available: 1` with priority 5 or it may not deliver one at
+     * all. {@see PushMessage::silent()} explains which messages are silent
+     * and why reminders have to be.
+     *
+     * @return array<string, mixed>
+     */
+    private function envelope(string $token, PushMessage $message): array
+    {
+        $envelope = ['token' => $token, 'data' => $message->data];
+
+        if (! $message->isSilent()) {
+            $envelope['notification'] = ['title' => $message->title, 'body' => $message->body];
+
+            return $envelope;
+        }
+
+        return $envelope + [
+            'android' => ['priority' => 'high'],
+            'apns' => [
+                'headers' => ['apns-priority' => '5', 'apns-push-type' => 'background'],
+                'payload' => ['aps' => ['content-available' => 1]],
+            ],
+        ];
     }
 
     /** Cached for fifty of its sixty minutes, as the Play client does. */

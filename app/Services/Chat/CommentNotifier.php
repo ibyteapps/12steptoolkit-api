@@ -64,7 +64,18 @@ class CommentNotifier
                 $this->push->send($tokens, new PushMessage(
                     title: $this->name($author),
                     body: 'sent you a message',
-                    data: ['type' => 'COMMENT', 'thread_id' => (string) $threadId],
+                    /*
+                     | `table`, not `type`. Both clients switch on
+                     | `data['table']` and neither has ever read `type` as the
+                     | routing key: `PushRouter.knownTables` lists `COMMENTS`
+                     | and answers `IgnoreLink('unknown_table')` for anything
+                     | it does not recognise, and an absent `table` is
+                     | `empty_payload`. Every live script that notifies a
+                     | thread sends `['table' => 'COMMENTS']`, so this one
+                     | does too, and `thread_id` is what makes a tap open the
+                     | conversation rather than the community list.
+                     */
+                    data: ['table' => 'COMMENTS', 'thread_id' => (string) $threadId],
                 ));
                 $told++;
             } catch (\Throwable $e) {

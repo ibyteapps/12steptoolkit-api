@@ -151,7 +151,7 @@ it('rotates the wording, least used first', function () use ($dispatch) {
     ($this->reminder)();
     $dispatch();
 
-    expect($this->sender->sent[0]['message']->body)->toBe('Hardly used');
+    expect($this->sender->sent[0]['message']->data['text'])->toBe('Hardly used');
 
     // And the pick is recorded, so the next one is a different line.
     expect((int) DB::table('notification_texts')->where('description', 'Hardly used')->value('times_used'))
@@ -166,15 +166,48 @@ it('falls back to English when the language has no line of its own', function ()
     ($this->reminder)(['language' => 'pl']);
     $dispatch();
 
-    expect($this->sender->sent[0]['message']->body)->toBe('The English one');
+    expect($this->sender->sent[0]['message']->data['text'])->toBe('The English one');
 });
 
 it('still sends something when the table is empty', function () use ($dispatch) {
     ($this->reminder)();
     $dispatch();
 
-    expect($this->sender->sent[0]['message']->body)->toBe('Time for your nightly inventory.')
-        ->and($this->sender->sent[0]['message']->title)->toBe('Before you turn in');
+    expect($this->sender->sent[0]['message']->data['text'])->toBe('Time for your nightly inventory.');
+});
+
+/*
+ | The payload is the part that decides whether any of this arrives anywhere.
+ | Both clients switch on `data['table']`, and neither reads `type`: the new
+ | one answers `IgnoreLink('unknown_table')` for a value it does not know and
+ | `empty_payload` when `table` is absent altogether, so a reminder sent
+ | without it is delivered by Google, dropped by the app, and invisible from
+ | here.
+ */
+it('routes on table and subtype, as both clients read it', function () use ($dispatch) {
+    $reminder = ($this->reminder)();
+    $dispatch();
+
+    $message = $this->sender->sent[0]['message'];
+
+    expect($message->table())->toBe('REMINDER')
+        ->and($message->data['subtype'])->toBe('NIGHT')
+        // Unique per firing. `PushRouter._reminder` ignores a repeat of the
+        // last id it handled, so a bare row id would make every reminder
+        // after the first look like a duplicate of the first.
+        ->and($message->data['reminder_id'])->toBe($reminder->id.'-'.$reminder->next_fire_at->getTimestamp());
+});
+
+it('sends reminders data-only, so nobody gets them twice', function () use ($dispatch) {
+    ($this->reminder)();
+    $dispatch();
+
+    // Both clients compose and show the reminder themselves — the new one
+    // suppressing the server's copy when the device has already armed a
+    // local one. An FCM `notification` block would show every morning
+    // reminder twice, which is why the live scripts send no title.
+    expect($this->sender->sent[0]['message']->isSilent())->toBeTrue()
+        ->and($this->sender->sent[0]['message']->title)->toBe('');
 });
 
 /*

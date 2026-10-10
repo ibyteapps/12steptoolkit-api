@@ -55,7 +55,7 @@ return [
      | folder `…/12steptoolkit.com/api`, and nginx routes three prefixes to it
      | (`/console`, `/api/v2`, `/up`) while everything else goes on reaching
      | the export exactly as before. One domain, two things serving it, and
-     | the 205 indexed URLs never pass through here at all.
+     | the 169 indexed URLs never pass through here at all.
      |
      | It turns true only if the document root is ever moved onto this
      | application, which needs `docs/WEBSITE_TAKEOVER.md` satisfied first.

@@ -63,6 +63,10 @@ class EntitlementService
             $candidates = array_values(array_filter([
                 $this->fromStore($accountId),
                 $this->fromComplimentary($accountId),
+                // A gift a sponsor bought for this member. R4: it survives the
+                // sponsor's own subscription lapsing, because it was bought
+                // outright and is not a seat on their plan.
+                $this->fromGift($accountId),
                 // RevenueCat's own answer, as last recorded. Kept in its own
                 // column so it can be read, audited and switched off without
                 // disturbing the store-verified state beside it.
@@ -174,6 +178,36 @@ class EntitlementService
         ];
     }
 
+    /**
+     * Months a sponsor gifted this member.
+     *
+     * The engine had three sources — the stores, a complimentary grant and
+     * RevenueCat — and no gift, so a sponsee handed a seat was not premium
+     * however many months had been bought for them. `SponseeGifts` holds the
+     * two tables and the rules; this turns the answer into a candidate.
+     */
+    private function fromGift(int $accountId): ?array
+    {
+        $until = app(SponseeGifts::class)->accessUntil($accountId);
+
+        if ($until === null || $until->isPast()) {
+            return null;
+        }
+
+        return [
+            'is_active' => true,
+            'state' => 'active',
+            'source' => 'sponsee_gift',
+            'product_id' => null,
+            'cycle' => null,
+            // A consumable. Nothing renews; when the months are up they are up.
+            'will_renew' => false,
+            'started_at' => null,
+            'expires_at' => $until,
+            'grace_period_expires_at' => null,
+        ];
+    }
+
     private function fromComplimentary(int $accountId): ?array
     {
         $grant = ComplimentaryGrant::query()
@@ -201,9 +235,27 @@ class EntitlementService
         ];
     }
 
+    /**
+     * RevenueCat's answer, while it is still allowed to grant one.
+     *
+     * Two flags, not one. `enabled` is whether this server listens to
+     * RevenueCat at all; `grants_access` is whether what it hears may make
+     * somebody premium. They separate because the cutover needs a middle
+     * state: still ingesting (so the console stays truthful and a purchase
+     * made in the old app is still seen), no longer granting (because the
+     * import has been verified and this server now knows from the stores
+     * directly).
+     *
+     * Turning both off together would un-subscribe everyone not yet imported.
+     * See `config/billing.php` and `docs/ENTITLEMENT_RULES.md` §0.
+     */
     private function fromRevenueCat(Entitlement $entitlement): ?array
     {
         if (! config('billing.revenuecat.enabled')) {
+            return null;
+        }
+
+        if (! config('billing.revenuecat.grants_access')) {
             return null;
         }
 

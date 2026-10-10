@@ -67,6 +67,21 @@ and `sw8` never written.
 **Account** — `get_user_account.php`, `update_account.php`,
 `update_account_details.php`.
 
+**Billing** — all four of v19's: `add_order.php`,
+`add_sponsee_order_and_gift.php`, `get_sponsee_gift_expiry.php`,
+`revcat_is_subscribed.php`. Covered: a gift recording the purchase, assigning
+one seat and notifying the member; the sponsee being premium immediately
+(including the write-through to `accounts.subscribed`); idempotency on a
+retried call; a second member refused on a one-seat order; a posted `quantity`
+bigger than what was bought being ignored; gifting refused to somebody the
+caller is not connected to, to an erased account, and on a body naming
+somebody else as the buyer; the term read off the SKU **by its words** when a
+client sends none — `…annual_sponsee1` is twelve months, not one — and refused
+outright when it cannot be worked out; the expiry endpoint's bare-array shape;
+the longest of two gifts winning rather than the latest; `add_order.php`
+granting no access at all; and `revcat_is_subscribed.php` answering about the
+caller and nobody else. 31 tests.
+
 **Comments and chat** — the twelve endpoints `retrofit/ApiService.kt` actually
 calls: `get_comments`, `get_step_comments`, `get_comment_for_account_id`,
 `get_comment_threads`, `get_comment_receipts`, `comment_add_update`,
@@ -177,19 +192,22 @@ up A6: `nights` and `mornings` are latin1 while the connection is utf8mb4, so
 every curly apostrophe iOS inserts into a nightly review is stored as `?`.
 `app:check` now reports that on every run.
 
-### Entitlements — the three-source resolver
+### Entitlements — the four-source resolver
 
 `Services/Billing/EntitlementService` is the only thing allowed to answer "is
-this person premium?", and it exists because during the overlap there are three
+this person premium?", and it exists because during the overlap there are four
 legitimate sources: store subscriptions this server verified, RevenueCat
 (read-only, and the only source that knows about every subscription sold before
-this server existed — which is all of them), and grants made in the console.
+this server existed — which is all of them), grants made in the console, and
+months a sponsor gifted (`Services/Billing/SponseeGifts`, added 2026-10-10 —
+the engine had no gift source at all, so a sponsee handed a seat was not
+premium however many months had been bought for them).
 
-Three sources for one boolean is ordinarily a bug. One rule makes it safe:
+Four sources for one boolean is ordinarily a bug. One rule makes it safe:
 
 > **No source may take away access that another source still grants.**
 
-The resolved entitlement is the most generous of the three. Fourteen tests, each
+The resolved entitlement is the most generous of the four. Fourteen tests, each
 written in the mean direction — they set up the situation where a naive "last
 writer wins" would revoke somebody, and assert that it does not. Covered: a late
 RevenueCat webhook versus a fresh Apple verification and the reverse, whichever

@@ -80,11 +80,7 @@ class ReminderDispatcher
             }
 
             try {
-                $this->push->send($tokens, new PushMessage(
-                    title: $this->texts->title((string) $reminder->type),
-                    body: $this->texts->body((string) $reminder->type, (string) ($reminder->language ?: 'en')),
-                    data: ['type' => (string) $reminder->type],
-                ));
+                $this->push->send($tokens, $this->message($reminder));
                 $stats['sent']++;
             } catch (\Throwable $e) {
                 // One member's bad token must not stop the run.
@@ -98,6 +94,39 @@ class ReminderDispatcher
         }
 
         return $stats;
+    }
+
+    /**
+     * The payload, which is deliberately data-only.
+     *
+     * Both clients build the reminder notification themselves — the new one
+     * from its own `NotificationCatalog`, suppressing the server's copy when
+     * the device has already armed a local reminder for that slot; the old
+     * one in `ManageRemindersFCM`, whose title comes from its string
+     * resources and whose subtitle is `data['text']`. An FCM `notification`
+     * block would therefore show every reminder twice, which is why the live
+     * scripts send `['table' => 'REMINDER', 'subtype' => …]` and nothing
+     * else. See {@see PushMessage::silent()}.
+     */
+    private function message(ReminderSubscription $reminder): PushMessage
+    {
+        return PushMessage::silent([
+            'table' => 'REMINDER',
+            'subtype' => strtoupper((string) $reminder->type),
+            /*
+             | Unique per firing, not per subscription. `PushRouter._reminder`
+             | remembers the last `reminder_id` it handled and ignores a
+             | repeat, so sending the row id would make every reminder after
+             | the first one look like a duplicate delivery of the first. The
+             | scheduled slot is what makes two mornings different and a
+             | re-delivered morning the same.
+             */
+            'reminder_id' => $reminder->id.'-'.($reminder->next_fire_at?->getTimestamp() ?? 0),
+            // Read by the old client as the notification's subtitle, and
+            // ignored by the new one, which has its own copy and does not
+            // read server strings at all.
+            'text' => $this->texts->body((string) $reminder->type, (string) ($reminder->language ?: 'en')),
+        ]);
     }
 
     private function advance(ReminderSubscription $reminder, Carbon $now): void
